@@ -49,8 +49,9 @@ class ConfigStore:
         return [
             {
                 "name": p["name"],
+                "config": p["config"],
                 "created_at": p["created_at"],
-                "updated_at": p["updated_at"],
+                "updated_at": p.get("updated_at", p["created_at"]),
             }
             for p in presets
         ]

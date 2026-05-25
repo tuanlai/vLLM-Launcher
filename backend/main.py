@@ -312,7 +312,7 @@ async def check_vram(
 @app.get("/api/presets")
 async def list_presets():
     """List all saved presets."""
-    return config_store.list_all()
+    return {"presets": config_store.list_all()}
 
 
 @app.post("/api/presets")

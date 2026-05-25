@@ -19,8 +19,14 @@ interface ConfigState {
   max_model_len: string
   quantization: string
   dtype: string
+  kv_cache_dtype: string
   trust_remote_code: boolean
   enforce_eager: boolean
+  enable_chunked_prefill: boolean
+  enable_auto_tool_choice: boolean
+  tool_call_parser: string
+  reasoning_parser: string
+  speculative_config: string
   seed: string
   max_num_seqs: string
   max_num_batched_tokens: string
@@ -42,8 +48,14 @@ const DEFAULTS: ConfigState = {
   max_model_len: '',
   quantization: '',
   dtype: '',
+  kv_cache_dtype: 'auto',
   trust_remote_code: false,
   enforce_eager: false,
+  enable_chunked_prefill: false,
+  enable_auto_tool_choice: false,
+  tool_call_parser: '',
+  reasoning_parser: '',
+  speculative_config: '',
   seed: '',
   max_num_seqs: '',
   max_num_batched_tokens: '',
@@ -74,8 +86,18 @@ function buildCommand(config: ConfigState): string {
   if (config.max_model_len) parts.push('--max-model-len', config.max_model_len)
   if (config.quantization) parts.push('--quantization', config.quantization)
   if (config.dtype) parts.push('--dtype', config.dtype)
+  if (config.kv_cache_dtype !== DEFAULTS.kv_cache_dtype)
+    parts.push('--kv-cache-dtype', config.kv_cache_dtype)
   if (config.trust_remote_code) parts.push('--trust-remote-code')
   if (config.enforce_eager) parts.push('--enforce-eager')
+  if (config.enable_chunked_prefill) parts.push('--enable-chunked-prefill')
+  if (config.enable_auto_tool_choice) parts.push('--enable-auto-tool-choice')
+  if (config.tool_call_parser)
+    parts.push('--tool-call-parser', config.tool_call_parser)
+  if (config.reasoning_parser)
+    parts.push('--reasoning-parser', config.reasoning_parser)
+  if (config.speculative_config)
+    parts.push('--speculative-config', `'${config.speculative_config}'`)
   if (config.seed) parts.push('--seed', config.seed)
   if (config.max_num_seqs) parts.push('--max-num-seqs', config.max_num_seqs)
   if (config.max_num_batched_tokens)
@@ -246,8 +268,14 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
       max_model_len: config.max_model_len ? parseInt(config.max_model_len) : null,
       quantization: config.quantization || null,
       dtype: config.dtype || null,
+      kv_cache_dtype: config.kv_cache_dtype === 'auto' ? null : config.kv_cache_dtype,
       trust_remote_code: config.trust_remote_code,
       enforce_eager: config.enforce_eager,
+      enable_chunked_prefill: config.enable_chunked_prefill,
+      enable_auto_tool_choice: config.enable_auto_tool_choice,
+      tool_call_parser: config.tool_call_parser || null,
+      reasoning_parser: config.reasoning_parser || null,
+      speculative_config: config.speculative_config || null,
       seed: config.seed ? parseInt(config.seed) : null,
       max_num_seqs: config.max_num_seqs ? parseInt(config.max_num_seqs) : null,
       max_num_batched_tokens: config.max_num_batched_tokens
@@ -418,6 +446,31 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
+            <label className="input-label">KV Cache Dtype</label>
+            <select
+              className="input"
+              value={config.kv_cache_dtype}
+              onChange={(e) => update('kv_cache_dtype', e.target.value)}
+            >
+              <option value="auto">auto</option>
+              <option value="fp8_e4m3">fp8_e4m3</option>
+              <option value="fp8_e5m2">fp8_e5m2</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="input-label">Max Num Batched Tokens</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="Default"
+              value={config.max_num_batched_tokens}
+              onChange={(e) => update('max_num_batched_tokens', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
             <label className="input-label">Trust Remote Code</label>
             <Toggle
               active={config.trust_remote_code}
@@ -434,31 +487,81 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             />
           </div>
         </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="input-label">Enable Chunked Prefill</label>
+            <Toggle
+              active={config.enable_chunked_prefill}
+              onClick={() =>
+                update('enable_chunked_prefill', !config.enable_chunked_prefill)
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="input-label">Enable Auto Tool Choice</label>
+            <Toggle
+              active={config.enable_auto_tool_choice}
+              onClick={() =>
+                update('enable_auto_tool_choice', !config.enable_auto_tool_choice)
+              }
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="input-label">Tool Call Parser</label>
+            <select
+              className="input"
+              value={config.tool_call_parser}
+              onChange={(e) => update('tool_call_parser', e.target.value)}
+            >
+              <option value="">None</option>
+              <option value="hermes">hermes</option>
+              <option value="llama3_json">llama3_json</option>
+              <option value="mistral">mistral</option>
+              <option value="internlm">internlm</option>
+              <option value="qwen3_coder">qwen3_coder</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="input-label">Reasoning Parser</label>
+            <select
+              className="input"
+              value={config.reasoning_parser}
+              onChange={(e) => update('reasoning_parser', e.target.value)}
+            >
+              <option value="">None</option>
+              <option value="deepseek_r1">deepseek_r1</option>
+              <option value="qwen3">qwen3</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="input-label">Speculative Config</label>
+          <input
+            type="text"
+            className="input"
+            placeholder='e.g. {"model": "path/to/draft", "num_speculative_tokens": 5}'
+            value={config.speculative_config}
+            onChange={(e) => update('speculative_config', e.target.value)}
+          />
+        </div>
       </Section>
 
       {/* Performance Tuning */}
       <Section title="Performance Tuning" defaultOpen={false}>
-        <div className="form-row">
-          <div className="form-group">
-            <label className="input-label">Max Num Seqs</label>
-            <input
-              type="number"
-              className="input"
-              placeholder="Default"
-              value={config.max_num_seqs}
-              onChange={(e) => update('max_num_seqs', e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label className="input-label">Max Num Batched Tokens</label>
-            <input
-              type="number"
-              className="input"
-              placeholder="Default"
-              value={config.max_num_batched_tokens}
-              onChange={(e) => update('max_num_batched_tokens', e.target.value)}
-            />
-          </div>
+        <div className="form-group">
+          <label className="input-label">Max Num Seqs</label>
+          <input
+            type="number"
+            className="input"
+            placeholder="Default"
+            value={config.max_num_seqs}
+            onChange={(e) => update('max_num_seqs', e.target.value)}
+          />
         </div>
 
         <div className="form-row">
