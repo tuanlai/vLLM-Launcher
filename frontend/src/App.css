@@ -2,38 +2,38 @@
 
 :root {
   /* Surface */
-  --canvas: #101010;
-  --canvas-soft: #1a1a1a;
-  --canvas-softer: #141414;
-  --surface-card: #181818;
-  --surface-hover: #1f1f1f;
+  --canvas: #ffffff;
+  --canvas-soft: #fafafa;
+  --canvas-softer: #f5f5f5;
+  --surface-card: #ffffff;
+  --surface-hover: #fafafa;
 
   /* Brand */
-  --primary: #00d992;
-  --primary-soft: #2fd6a1;
-  --primary-deep: #10b981;
-  --primary-glow: rgba(0, 217, 146, 0.15);
-  --primary-glow-strong: rgba(0, 217, 146, 0.3);
+  --primary: #000000;
+  --primary-soft: #171717;
+  --primary-deep: #0a0a0a;
+  --primary-glow: rgba(0, 0, 0, 0.04);
+  --primary-glow-strong: rgba(0, 0, 0, 0.08);
 
   /* Text */
-  --ink: #f2f2f2;
-  --ink-strong: #ffffff;
-  --body: #bdbdbd;
-  --mute: #8b949e;
+  --ink: #000000;
+  --ink-strong: #000000;
+  --body: #525252;
+  --mute: #a3a3a3;
 
   /* Border */
-  --hairline: #2a2a2a;
-  --hairline-soft: #222222;
+  --hairline: #e5e5e5;
+  --hairline-soft: #d4d4d4;
 
   /* Semantic */
   --error: #ef4444;
-  --error-soft: rgba(239, 68, 68, 0.15);
+  --error-soft: rgba(239, 68, 68, 0.08);
   --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.15);
-  --success: #00d992;
-  --success-soft: rgba(0, 217, 146, 0.1);
+  --warning-soft: rgba(245, 158, 11, 0.08);
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.08);
   --info: #3b82f6;
-  --info-soft: rgba(59, 130, 246, 0.15);
+  --info-soft: rgba(59, 130, 246, 0.08);
 
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -115,13 +115,20 @@ body {
   min-width: 0;
 }
 
+/* Sidebar */
+.sidebar {
+  background: var(--canvas);
+  border-right: 1px solid var(--hairline);
+}
+
 /* Cards */
 .card {
   background: var(--surface-card);
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: var(--space-2xl);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease;
+  box-shadow: none;
 }
 .card:hover {
   border-color: var(--hairline-soft);
@@ -136,7 +143,7 @@ body {
 .card-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--ink-strong);
 }
 .card-subtitle {
   font-size: 13px;
@@ -163,8 +170,9 @@ body {
 
 .btn-primary {
   background: var(--primary);
-  color: #101010;
+  color: #ffffff;
   border-color: var(--primary);
+  border-radius: var(--radius-pill);
 }
 .btn-primary:hover {
   background: var(--primary-soft);
@@ -191,6 +199,7 @@ body {
   background: transparent;
   color: var(--body);
   border-color: var(--hairline);
+  border-radius: var(--radius-sm);
 }
 .btn-ghost:hover {
   background: var(--surface-hover);
@@ -200,7 +209,7 @@ body {
 
 /* Inputs */
 .input {
-  background: var(--canvas-soft);
+  background: var(--canvas);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-md);
@@ -231,7 +240,7 @@ body {
 
 select.input {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a3a3a3' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 32px;
@@ -278,7 +287,7 @@ textarea.input {
   background: var(--primary);
   cursor: pointer;
   border: 2px solid var(--canvas);
-  box-shadow: 0 0 0 1px var(--primary);
+  box-shadow: 0 0 0 1px var(--hairline);
 }
 .slider-value {
   font-family: var(--font-mono);
@@ -331,7 +340,7 @@ textarea.input {
 }
 .badge-success {
   background: var(--success-soft);
-  color: var(--primary);
+  color: var(--success);
 }
 .badge-error {
   background: var(--error-soft);
@@ -346,7 +355,7 @@ textarea.input {
   color: var(--info);
 }
 .badge-neutral {
-  background: var(--canvas-soft);
+  background: var(--canvas-softer);
   color: var(--mute);
 }
 
@@ -379,10 +388,10 @@ textarea.input {
   animation: pulse-ring 2s ease-out infinite;
 }
 .status-dot.running {
-  background: var(--primary);
+  background: var(--success);
 }
 .status-dot.running::before {
-  background: var(--primary);
+  background: var(--success);
 }
 .status-dot.starting {
   background: var(--warning);
@@ -397,7 +406,7 @@ textarea.input {
   background: var(--error);
 }
 .status-dot.idle, .status-dot.stopped {
-  background: var(--mute);
+  background: var(--primary);
 }
 .status-dot.idle::before, .status-dot.stopped::before {
   display: none;
