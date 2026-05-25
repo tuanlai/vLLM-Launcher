@@ -1,88 +1,327 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import ModelSelector from './ModelSelector'
+import VRAMIndicator from './VRAMIndicator'
+import PresetManager from './PresetManager'
+import type { VRAMCheckResult } from './ModelSelector'
 
 interface ConfigFormProps {
   onSubmit: (config: Record<string, any>) => void
   disabled?: boolean
 }
 
-const PRESETS = [
-  { name: 'Small Model (7B)', model: 'meta-llama/Llama-2-7b-chat-hf', tp: 1, mem: 0.9 },
-  { name: 'Medium Model (13B)', model: 'meta-llama/Llama-2-13b-chat-hf', tp: 2, mem: 0.9 },
-  { name: 'Large Model (70B)', model: 'meta-llama/Llama-2-70b-chat-hf', tp: 4, mem: 0.9 },
-]
+interface ConfigState {
+  model: string
+  port: number
+  host: string
+  tensor_parallel_size: number
+  gpu_memory_utilization: number
+  max_model_len: string
+  quantization: string
+  dtype: string
+  trust_remote_code: boolean
+  enforce_eager: boolean
+  seed: string
+  max_num_seqs: string
+  max_num_batched_tokens: string
+  swap_space: number
+  block_size: string
+  enable_prefix_caching: string
+  disable_log_stats: boolean
+  load_format: string
+  lora: string
+  extra_args: string
+}
+
+const DEFAULTS: ConfigState = {
+  model: '',
+  port: 8000,
+  host: '0.0.0.0',
+  tensor_parallel_size: 1,
+  gpu_memory_utilization: 0.9,
+  max_model_len: '',
+  quantization: '',
+  dtype: '',
+  trust_remote_code: false,
+  enforce_eager: false,
+  seed: '',
+  max_num_seqs: '',
+  max_num_batched_tokens: '',
+  swap_space: 4,
+  block_size: '',
+  enable_prefix_caching: 'auto',
+  disable_log_stats: false,
+  load_format: 'auto',
+  lora: '',
+  extra_args: '',
+}
+
+function buildCommand(config: ConfigState): string {
+  const parts: string[] = ['vllm', 'serve']
+
+  if (!config.model) {
+    return parts.join(' ') + ' <model>'
+  }
+
+  parts.push(config.model)
+
+  if (config.port !== DEFAULTS.port) parts.push('--port', String(config.port))
+  if (config.host !== DEFAULTS.host) parts.push('--host', config.host)
+  if (config.tensor_parallel_size !== DEFAULTS.tensor_parallel_size)
+    parts.push('--tensor-parallel-size', String(config.tensor_parallel_size))
+  if (config.gpu_memory_utilization !== DEFAULTS.gpu_memory_utilization)
+    parts.push('--gpu-memory-utilization', String(config.gpu_memory_utilization))
+  if (config.max_model_len) parts.push('--max-model-len', config.max_model_len)
+  if (config.quantization) parts.push('--quantization', config.quantization)
+  if (config.dtype) parts.push('--dtype', config.dtype)
+  if (config.trust_remote_code) parts.push('--trust-remote-code')
+  if (config.enforce_eager) parts.push('--enforce-eager')
+  if (config.seed) parts.push('--seed', config.seed)
+  if (config.max_num_seqs) parts.push('--max-num-seqs', config.max_num_seqs)
+  if (config.max_num_batched_tokens)
+    parts.push('--max-num-batched-tokens', config.max_num_batched_tokens)
+  if (config.swap_space !== DEFAULTS.swap_space)
+    parts.push('--swap-space', String(config.swap_space))
+  if (config.block_size) parts.push('--block-size', config.block_size)
+
+  if (config.enable_prefix_caching === 'true') {
+    parts.push('--enable-prefix-caching')
+  } else if (config.enable_prefix_caching === 'false') {
+    parts.push('--no-enable-prefix-caching')
+  }
+
+  if (config.disable_log_stats) parts.push('--disable-log-stats')
+  if (config.load_format !== DEFAULTS.load_format)
+    parts.push('--load-format', config.load_format)
+  if (config.lora) parts.push('--lora', config.lora)
+
+  if (config.extra_args.trim()) {
+    parts.push(config.extra_args.trim())
+  }
+
+  return parts.join(' ')
+}
+
+function Toggle({
+  active,
+  onClick,
+}: {
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`toggle ${active ? 'active' : ''}`}
+      onClick={onClick}
+    />
+  )
+}
+
+function TriStateToggle({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const cycle = () => {
+    if (value === 'auto') onChange('true')
+    else if (value === 'true') onChange('false')
+    else onChange('auto')
+  }
+
+  const label = value === 'auto' ? 'Auto' : value === 'true' ? 'Yes' : 'No'
+
+  return (
+    <button type="button" className="tri-state-toggle" onClick={cycle}>
+      <span
+        className={`tri-state-dot ${value === 'true' ? 'on' : value === 'false' ? 'off' : 'auto'}`}
+      />
+      <span className="tri-state-label">{label}</span>
+    </button>
+  )
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+        transition: 'transform 0.2s ease',
+      }}
+    >
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  )
+}
+
+function CopyIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+}
+
+function PlayIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  )
+}
+
+function Section({
+  title,
+  defaultOpen = true,
+  children,
+}: {
+  title: string
+  defaultOpen?: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <div className="section">
+      <div className="section-header" onClick={() => setOpen(!open)}>
+        <span className="section-title">{title}</span>
+        <span className="section-toggle">
+          <ChevronIcon open={open} />
+        </span>
+      </div>
+      {open && <div className="section-content">{children}</div>}
+    </div>
+  )
+}
 
 export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
-  const [config, setConfig] = useState({
-    model: '',
-    tensor_parallel_size: 1,
-    port: 8000,
-    gpu_memory_utilization: 0.9,
-    max_model_len: '',
-    quantization: '',
-    dtype: '',
-    trust_remote_code: false,
-    extra_args: '',
-  })
+  const [config, setConfig] = useState<ConfigState>({ ...DEFAULTS })
+  const [vramResult, setVramResult] = useState<VRAMCheckResult | null>(null)
+  const [copied, setCopied] = useState(false)
 
-  const update = (key: string, value: any) => {
+  const update = <K extends keyof ConfigState>(key: K, value: ConfigState[K]) => {
     setConfig((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const command = useMemo(() => buildCommand(config), [config])
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // fallback: select text
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const submitConfig: Record<string, any> = {
-      ...config,
+      model: config.model,
+      port: config.port,
+      host: config.host,
+      tensor_parallel_size: config.tensor_parallel_size,
+      gpu_memory_utilization: config.gpu_memory_utilization,
       max_model_len: config.max_model_len ? parseInt(config.max_model_len) : null,
       quantization: config.quantization || null,
       dtype: config.dtype || null,
+      trust_remote_code: config.trust_remote_code,
+      enforce_eager: config.enforce_eager,
+      seed: config.seed ? parseInt(config.seed) : null,
+      max_num_seqs: config.max_num_seqs ? parseInt(config.max_num_seqs) : null,
+      max_num_batched_tokens: config.max_num_batched_tokens
+        ? parseInt(config.max_num_batched_tokens)
+        : null,
+      swap_space: config.swap_space,
+      block_size: config.block_size ? parseInt(config.block_size) : null,
+      enable_prefix_caching:
+        config.enable_prefix_caching === 'auto'
+          ? null
+          : config.enable_prefix_caching === 'true',
+      disable_log_stats: config.disable_log_stats,
+      load_format: config.load_format,
+      lora: config.lora || null,
+      extra_args: config.extra_args || '',
     }
     onSubmit(submitConfig)
   }
 
-  const applyPreset = (preset: typeof PRESETS[0]) => {
-    setConfig((prev) => ({
-      ...prev,
-      model: preset.model,
-      tensor_parallel_size: preset.tp,
-      gpu_memory_utilization: preset.mem,
-    }))
-  }
-
   return (
     <form onSubmit={handleSubmit} className="config-form">
-      <div className="form-section">
-        <h3 className="form-section-title">Quick Presets</h3>
-        <div className="presets-grid">
-          {PRESETS.map((preset) => (
-            <motion.button
-              key={preset.name}
-              type="button"
-              className="preset-btn"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => applyPreset(preset)}
-            >
-              <span className="preset-name">{preset.name}</span>
-              <span className="preset-detail">TP={preset.tp}</span>
-            </motion.button>
-          ))}
-        </div>
+      {/* Command Preview */}
+      <div className="command-preview">
+        <code className="command-text">{command}</code>
+        <button
+          type="button"
+          className="copy-btn btn btn-ghost"
+          onClick={handleCopy}
+          title="Copy command"
+        >
+          {copied ? 'Copied!' : <CopyIcon />}
+        </button>
       </div>
 
-      <div className="form-section">
-        <h3 className="form-section-title">Model Configuration</h3>
+      {/* Presets */}
+      <div className="section">
+        <PresetManager
+          currentConfig={config}
+          onLoad={(loadedConfig) =>
+            setConfig((prev) => ({ ...prev, ...loadedConfig }))
+          }
+        />
+      </div>
 
+      {/* Common Parameters */}
+      <Section title="Common Parameters" defaultOpen={true}>
         <div className="form-group">
-          <label className="input-label">Model</label>
-          <input
-            type="text"
-            className="input"
-            placeholder="e.g., meta-llama/Llama-2-7b-chat-hf"
+          <ModelSelector
             value={config.model}
-            onChange={(e) => update('model', e.target.value)}
-            required
+            onChange={(model) => update('model', model)}
+            onVRAMCheck={(result) => setVramResult(result)}
           />
+          <VRAMIndicator result={vramResult} />
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="input-label">Port</label>
+            <input
+              type="number"
+              className="input"
+              value={config.port}
+              onChange={(e) => update('port', parseInt(e.target.value) || 8000)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="input-label">Host</label>
+            <input
+              type="text"
+              className="input"
+              value={config.host}
+              onChange={(e) => update('host', e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="form-row">
@@ -96,12 +335,13 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
                 max="8"
                 step="1"
                 value={config.tensor_parallel_size}
-                onChange={(e) => update('tensor_parallel_size', parseInt(e.target.value))}
+                onChange={(e) =>
+                  update('tensor_parallel_size', parseInt(e.target.value))
+                }
               />
               <span className="slider-value">{config.tensor_parallel_size}</span>
             </div>
           </div>
-
           <div className="form-group">
             <label className="input-label">GPU Memory Utilization</label>
             <div className="slider-container">
@@ -112,24 +352,18 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
                 max="1"
                 step="0.05"
                 value={config.gpu_memory_utilization}
-                onChange={(e) => update('gpu_memory_utilization', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  update('gpu_memory_utilization', parseFloat(e.target.value))
+                }
               />
-              <span className="slider-value">{(config.gpu_memory_utilization * 100).toFixed(0)}%</span>
+              <span className="slider-value">
+                {(config.gpu_memory_utilization * 100).toFixed(0)}%
+              </span>
             </div>
           </div>
         </div>
 
         <div className="form-row">
-          <div className="form-group">
-            <label className="input-label">Port</label>
-            <input
-              type="number"
-              className="input"
-              value={config.port}
-              onChange={(e) => update('port', parseInt(e.target.value))}
-            />
-          </div>
-
           <div className="form-group">
             <label className="input-label">Max Model Length</label>
             <input
@@ -138,6 +372,16 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
               placeholder="Auto"
               value={config.max_model_len}
               onChange={(e) => update('max_model_len', e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="input-label">Seed</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="Random"
+              value={config.seed}
+              onChange={(e) => update('seed', e.target.value)}
             />
           </div>
         </div>
@@ -157,7 +401,6 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
               <option value="fp8">FP8</option>
             </select>
           </div>
-
           <div className="form-group">
             <label className="input-label">Data Type</label>
             <select
@@ -173,12 +416,120 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
           </div>
         </div>
 
+        <div className="form-row">
+          <div className="form-group">
+            <label className="input-label">Trust Remote Code</label>
+            <Toggle
+              active={config.trust_remote_code}
+              onClick={() =>
+                update('trust_remote_code', !config.trust_remote_code)
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="input-label">Enforce Eager</label>
+            <Toggle
+              active={config.enforce_eager}
+              onClick={() => update('enforce_eager', !config.enforce_eager)}
+            />
+          </div>
+        </div>
+      </Section>
+
+      {/* Performance Tuning */}
+      <Section title="Performance Tuning" defaultOpen={false}>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="input-label">Max Num Seqs</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="Default"
+              value={config.max_num_seqs}
+              onChange={(e) => update('max_num_seqs', e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="input-label">Max Num Batched Tokens</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="Default"
+              value={config.max_num_batched_tokens}
+              onChange={(e) => update('max_num_batched_tokens', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="input-label">Swap Space (GB)</label>
+            <input
+              type="number"
+              className="input"
+              value={config.swap_space}
+              onChange={(e) =>
+                update('swap_space', parseInt(e.target.value) || 4)
+              }
+            />
+          </div>
+          <div className="form-group">
+            <label className="input-label">Block Size</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="Default"
+              value={config.block_size}
+              onChange={(e) => update('block_size', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="input-label">Enable Prefix Caching</label>
+            <TriStateToggle
+              value={config.enable_prefix_caching}
+              onChange={(v) => update('enable_prefix_caching', v)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="input-label">Disable Log Stats</label>
+            <Toggle
+              active={config.disable_log_stats}
+              onClick={() =>
+                update('disable_log_stats', !config.disable_log_stats)
+              }
+            />
+          </div>
+        </div>
+
         <div className="form-group">
-          <label className="input-label" style={{ marginBottom: '8px' }}>Trust Remote Code</label>
-          <button
-            type="button"
-            className={`toggle ${config.trust_remote_code ? 'active' : ''}`}
-            onClick={() => update('trust_remote_code', !config.trust_remote_code)}
+          <label className="input-label">Load Format</label>
+          <select
+            className="input"
+            value={config.load_format}
+            onChange={(e) => update('load_format', e.target.value)}
+          >
+            <option value="auto">auto</option>
+            <option value="pt">pt</option>
+            <option value="safetensors">safetensors</option>
+            <option value="npcaches">npcaches</option>
+            <option value="dummy">dummy</option>
+          </select>
+        </div>
+      </Section>
+
+      {/* Advanced */}
+      <Section title="Advanced" defaultOpen={false}>
+        <div className="form-group">
+          <label className="input-label">LoRA</label>
+          <input
+            type="text"
+            className="input"
+            placeholder="LoRA adapter path or name"
+            value={config.lora}
+            onChange={(e) => update('lora', e.target.value)}
           />
         </div>
 
@@ -192,8 +543,9 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             rows={3}
           />
         </div>
-      </div>
+      </Section>
 
+      {/* Submit */}
       <motion.button
         type="submit"
         className="btn btn-primary submit-btn"
@@ -207,65 +559,107 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
       <style>{`
         .config-form {
-          max-width: 640px;
+          max-width: 800px;
         }
-        .form-section {
-          margin-bottom: 32px;
+        .command-preview {
+          background: var(--canvas-softer);
+          border: 1px solid var(--hairline);
+          border-radius: var(--radius-md);
+          padding: 16px;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          position: relative;
+          margin-bottom: 24px;
+          word-break: break-all;
+          line-height: 1.6;
         }
-        .form-section-title {
+        .command-text {
+          display: block;
+          padding-right: 40px;
+          white-space: pre-wrap;
+        }
+        .copy-btn {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          padding: 4px 8px;
+          font-size: 11px;
+        }
+        .copy-btn svg {
+          width: 14px;
+          height: 14px;
+        }
+        .section {
+          margin-bottom: 24px;
+        }
+        .section-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          cursor: pointer;
+          padding: 8px 0;
+          border-bottom: 1px solid var(--hairline);
+          user-select: none;
+        }
+        .section-title {
           font-size: 14px;
           font-weight: 600;
           color: var(--ink);
-          margin-bottom: 16px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid var(--hairline);
         }
-        .presets-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
+        .section-toggle {
+          font-size: 11px;
+          color: var(--mute);
+          display: flex;
+          align-items: center;
+        }
+        .section-content {
+          padding-top: 16px;
+        }
+        .tri-state-toggle {
+          display: inline-flex;
+          align-items: center;
           gap: 8px;
-        }
-        .preset-btn {
-          background: var(--canvas-soft);
+          padding: 6px 14px;
+          background: var(--canvas);
           border: 1px solid var(--hairline);
           border-radius: var(--radius-sm);
-          padding: 12px 16px;
           cursor: pointer;
-          text-align: left;
-          transition: all 0.15s;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .preset-btn:hover {
-          border-color: var(--primary);
-          background: var(--primary-glow);
-        }
-        .preset-name {
+          font-family: var(--font-sans);
           font-size: 13px;
-          font-weight: 500;
           color: var(--ink);
+          transition: all 0.15s ease;
         }
-        .preset-detail {
-          font-size: 11px;
-          font-family: var(--font-mono);
-          color: var(--mute);
+        .tri-state-toggle:hover {
+          border-color: var(--hairline-soft);
+        }
+        .tri-state-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          transition: background 0.15s ease;
+        }
+        .tri-state-dot.auto {
+          background: var(--mute);
+        }
+        .tri-state-dot.on {
+          background: var(--success);
+        }
+        .tri-state-dot.off {
+          background: var(--error);
+        }
+        .tri-state-label {
+          font-weight: 500;
+          min-width: 28px;
+          text-align: center;
         }
         .submit-btn {
           width: 100%;
           justify-content: center;
-          padding: 12px;
+          padding: 14px;
           font-size: 14px;
+          margin-top: 8px;
         }
       `}</style>
     </form>
-  )
-}
-
-function PlayIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
   )
 }
