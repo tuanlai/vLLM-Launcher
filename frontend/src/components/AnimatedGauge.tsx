@@ -14,7 +14,7 @@ export default function AnimatedGauge({
   max,
   label,
   unit,
-  color = '#00d992',
+  color = '#10b981',
 }: AnimatedGaugeProps) {
   const springValue = useSpring(0, {
     stiffness: 80,

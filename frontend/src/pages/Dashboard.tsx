@@ -25,16 +25,16 @@ export default function Dashboard({ ws }: DashboardProps) {
     },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#1a1a1a',
-      borderColor: '#2a2a2a',
-      textStyle: { color: '#f2f2f2', fontSize: 12, fontFamily: 'JetBrains Mono' },
-      axisPointer: { lineStyle: { color: '#2a2a2a' } },
+      backgroundColor: '#ffffff',
+      borderColor: '#e5e5e5',
+      textStyle: { color: '#000000', fontSize: 12, fontFamily: 'JetBrains Mono' },
+      axisPointer: { lineStyle: { color: '#e5e5e5' } },
     },
     legend: {
       data: ['Prefill', 'Decode'],
       top: 0,
       right: 0,
-      textStyle: { color: '#8b949e', fontSize: 11 },
+      textStyle: { color: '#a3a3a3', fontSize: 11 },
       itemWidth: 12,
       itemHeight: 2,
     },
@@ -46,10 +46,10 @@ export default function Dashboard({ ws }: DashboardProps) {
     yAxis: {
       type: 'value',
       name: 'tokens/s',
-      nameTextStyle: { color: '#8b949e', fontSize: 10 },
+      nameTextStyle: { color: '#a3a3a3', fontSize: 10 },
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: '#1a1a1a' } },
-      axisLabel: { color: '#8b949e', fontSize: 10, fontFamily: 'JetBrains Mono' },
+      splitLine: { lineStyle: { color: '#f5f5f5' } },
+      axisLabel: { color: '#a3a3a3', fontSize: 10, fontFamily: 'JetBrains Mono' },
     },
     series: [
       {
@@ -57,14 +57,14 @@ export default function Dashboard({ ws }: DashboardProps) {
         type: 'line',
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#00d992', width: 2 },
+        lineStyle: { color: '#10b981', width: 2 },
         areaStyle: {
           color: {
             type: 'linear',
             x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(0, 217, 146, 0.2)' },
-              { offset: 1, color: 'rgba(0, 217, 146, 0)' },
+              { offset: 0, color: 'rgba(16, 185, 129, 0.2)' },
+              { offset: 1, color: 'rgba(16, 185, 129, 0)' },
             ],
           },
         },
@@ -165,7 +165,7 @@ export default function Dashboard({ ws }: DashboardProps) {
             max={5000}
             label="tokens/s"
             unit="tok/s"
-            color="#00d992"
+            color="#10b981"
           />
         </div>
 
@@ -256,7 +256,7 @@ export default function Dashboard({ ws }: DashboardProps) {
                 ? '#ef4444'
                 : metrics.gpu_cache_usage > 0.75
                   ? '#f59e0b'
-                  : '#00d992',
+                  : '#10b981',
             }}
           />
         </div>

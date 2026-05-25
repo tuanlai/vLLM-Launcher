@@ -149,7 +149,7 @@ export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) 
         .log-viewer {
           display: flex;
           flex-direction: column;
-          background: #0d0d0d;
+          background: var(--canvas-soft);
           border: 1px solid var(--hairline);
           border-radius: var(--radius-md);
           overflow: hidden;
@@ -207,7 +207,7 @@ export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) 
           background: var(--surface-hover);
         }
         .log-filter-btn.active {
-          background: rgba(255,255,255,0.05);
+          background: rgba(0, 0, 0, 0.05);
         }
         .log-count {
           font-size: 11px;
@@ -233,10 +233,10 @@ export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) 
           transition: background 0.1s;
         }
         .log-line:hover {
-          background: rgba(255, 255, 255, 0.02);
+          background: rgba(0, 0, 0, 0.02);
         }
         .log-timestamp {
-          color: #555;
+          color: var(--mute);
           flex-shrink: 0;
           font-size: 11px;
         }
@@ -267,14 +267,14 @@ export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) 
           left: 50%;
           transform: translateX(-50%);
           background: var(--primary);
-          color: #101010;
+          color: #ffffff;
           border: none;
           border-radius: var(--radius-pill);
           padding: 6px 16px;
           font-size: 12px;
           font-weight: 600;
           cursor: pointer;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
           transition: transform 0.15s;
         }
         .log-scroll-btn:hover {

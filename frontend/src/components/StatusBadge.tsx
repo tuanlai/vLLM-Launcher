@@ -6,12 +6,12 @@ interface StatusBadgeProps {
 }
 
 const stateConfig: Record<string, { label: string; color: string; bg: string }> = {
-  idle: { label: 'Idle', color: '#8b949e', bg: 'rgba(139, 148, 158, 0.1)' },
-  starting: { label: 'Starting', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
-  running: { label: 'Running', color: '#00d992', bg: 'rgba(0, 217, 146, 0.1)' },
-  stopping: { label: 'Stopping', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
-  stopped: { label: 'Stopped', color: '#8b949e', bg: 'rgba(139, 148, 158, 0.1)' },
-  error: { label: 'Error', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
+  idle: { label: 'Idle', color: '#000000', bg: '#f5f5f5' },
+  starting: { label: 'Starting', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
+  running: { label: 'Running', color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
+  stopping: { label: 'Stopping', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
+  stopped: { label: 'Stopped', color: '#a3a3a3', bg: '#f5f5f5' },
+  error: { label: 'Error', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)' },
 }
 
 export default function StatusBadge({ state, showLabel = true }: StatusBadgeProps) {
