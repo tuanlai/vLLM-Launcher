@@ -25,12 +25,6 @@ export default function VRAMIndicator({ result, gpuName }: VRAMIndicatorProps) {
       ? 'var(--warning)'
       : 'var(--error)'
 
-  const bgColor = usagePercent < 75
-    ? 'var(--success-soft)'
-    : usagePercent < 90
-      ? 'var(--warning-soft)'
-      : 'var(--error-soft)'
-
   return (
     <div className="vram-indicator">
       <div className="vram-indicator-header">

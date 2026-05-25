@@ -8,7 +8,15 @@ interface LogsProps {
 }
 
 export default function Logs({ ws }: LogsProps) {
-  const { status, logs, clearLogs } = ws
+  const { selectedInstanceId, getStatus, getLogs, clearLogs } = ws
+
+  const status = selectedInstanceId ? getStatus(selectedInstanceId) : null
+  const logs = selectedInstanceId ? getLogs(selectedInstanceId) : []
+  const state = status?.state ?? 'idle'
+
+  const handleClear = () => {
+    if (selectedInstanceId) clearLogs(selectedInstanceId)
+  }
 
   const pageVariants = {
     initial: { opacity: 0, y: 8 },
@@ -28,11 +36,15 @@ export default function Logs({ ws }: LogsProps) {
       <div className="logs-header">
         <div>
           <h1 className="page-title">Logs</h1>
-          <p className="page-subtitle">Real-time vLLM server output</p>
+          <p className="page-subtitle">
+            {selectedInstanceId
+              ? `Real-time output for ${status?.model || selectedInstanceId}`
+              : 'Select an instance to view logs'}
+          </p>
         </div>
         <div className="logs-actions">
-          <StatusBadge state={status.state} />
-          <button className="btn btn-ghost" onClick={clearLogs}>
+          <StatusBadge state={state} />
+          <button className="btn btn-ghost" onClick={handleClear}>
             Clear
           </button>
         </div>

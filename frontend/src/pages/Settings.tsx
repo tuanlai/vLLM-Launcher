@@ -7,9 +7,16 @@ interface SettingsProps {
 }
 
 export default function Settings({ ws }: SettingsProps) {
-  const { status, startServer } = ws
+  const { selectedInstanceId, getStatus, createInstance, startInstance } = ws
 
-  const isDisabled = status.state === 'starting' || status.state === 'running'
+  const status = selectedInstanceId ? getStatus(selectedInstanceId) : null
+  const state = status?.state ?? 'idle'
+  const isDisabled = state === 'starting' || state === 'running'
+
+  const handleSubmit = async (config: Record<string, any>) => {
+    const id = await createInstance(config)
+    await startInstance(id)
+  }
 
   const pageVariants = {
     initial: { opacity: 0, y: 8 },
@@ -32,13 +39,13 @@ export default function Settings({ ws }: SettingsProps) {
         </div>
         {isDisabled && (
           <span className="badge badge-warning">
-            Server is {status.state}. Stop it first to change settings.
+            Server is {state}. Stop it first to change settings.
           </span>
         )}
       </div>
 
       <div className="card">
-        <ConfigForm onSubmit={startServer} disabled={isDisabled} />
+        <ConfigForm onSubmit={handleSubmit} disabled={isDisabled} />
       </div>
 
       <style>{`

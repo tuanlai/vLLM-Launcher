@@ -49,8 +49,6 @@ export default function InstanceCard({
   const isRunning = state === 'running'
   const isStarting = state === 'starting'
   const isError = state === 'error'
-  const isStopped = state === 'stopped' || state === 'idle'
-
   const dotColor = isRunning
     ? 'var(--success)'
     : isStarting

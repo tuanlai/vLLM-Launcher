@@ -62,7 +62,7 @@ export interface UseWebSocketReturn {
   clearError: () => void
 }
 
-const DEFAULT_METRICS: Metrics = {
+export const DEFAULT_METRICS: Metrics = {
   prefill_throughput: 0,
   decode_throughput: 0,
   total_tokens: 0,

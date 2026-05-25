@@ -3,16 +3,26 @@ import ReactECharts from 'echarts-for-react'
 import AnimatedGauge from '../components/AnimatedGauge'
 import StatusBadge from '../components/StatusBadge'
 import type { UseWebSocketReturn } from '../api/websocket'
+import { DEFAULT_METRICS } from '../api/websocket'
 
 interface DashboardProps {
   ws: UseWebSocketReturn
 }
 
 export default function Dashboard({ ws }: DashboardProps) {
-  const { status, metrics, metricsHistory, lastError, stopServer, clearError } = ws
+  const { selectedInstanceId, getStatus, getMetrics, getMetricsHistory, lastError, stopInstance, clearError } = ws
 
-  const isRunning = status.state === 'running'
-  const isStarting = status.state === 'starting'
+  const status = selectedInstanceId ? getStatus(selectedInstanceId) : null
+  const metrics = selectedInstanceId ? getMetrics(selectedInstanceId) : DEFAULT_METRICS
+  const metricsHistory = selectedInstanceId ? getMetricsHistory(selectedInstanceId) : []
+
+  const state = status?.state ?? 'idle'
+  const isRunning = state === 'running'
+  const isStarting = state === 'starting'
+
+  const handleStop = () => {
+    if (selectedInstanceId) stopInstance(selectedInstanceId)
+  }
 
   // Build throughput chart option
   const chartOption = {
@@ -40,7 +50,7 @@ export default function Dashboard({ ws }: DashboardProps) {
     },
     xAxis: {
       type: 'category',
-      data: metricsHistory.map((_, i) => i),
+      data: metricsHistory.map((_: unknown, i: number) => i),
       show: false,
     },
     yAxis: {
@@ -68,7 +78,7 @@ export default function Dashboard({ ws }: DashboardProps) {
             ],
           },
         },
-        data: metricsHistory.map((m) => m.prefill_throughput),
+        data: metricsHistory.map((m: { prefill_throughput: number }) => m.prefill_throughput),
       },
       {
         name: 'Decode',
@@ -86,7 +96,7 @@ export default function Dashboard({ ws }: DashboardProps) {
             ],
           },
         },
-        data: metricsHistory.map((m) => m.decode_throughput),
+        data: metricsHistory.map((m: { decode_throughput: number }) => m.decode_throughput),
       },
     ],
     animation: true,
@@ -97,6 +107,26 @@ export default function Dashboard({ ws }: DashboardProps) {
     initial: { opacity: 0, y: 8 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -8 },
+  }
+
+  if (!selectedInstanceId) {
+    return (
+      <motion.div
+        className="dashboard"
+        variants={pageVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        transition={{ duration: 0.25 }}
+      >
+        <div className="dashboard-header">
+          <div>
+            <h1 className="page-title">Dashboard</h1>
+            <p className="page-subtitle">Select an instance from the Instances page to monitor</p>
+          </div>
+        </div>
+      </motion.div>
+    )
   }
 
   return (
@@ -115,13 +145,13 @@ export default function Dashboard({ ws }: DashboardProps) {
           <p className="page-subtitle">Monitor vLLM server performance in real-time</p>
         </div>
         <div className="dashboard-actions">
-          <StatusBadge state={status.state} />
+          <StatusBadge state={state} />
           {(isRunning || isStarting) && (
             <motion.button
               className="btn btn-danger"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={stopServer}
+              onClick={handleStop}
             >
               Stop Server
             </motion.button>
@@ -144,7 +174,7 @@ export default function Dashboard({ ws }: DashboardProps) {
           <p className="error-banner-desc">{lastError.description}</p>
           {lastError.suggestions.length > 0 && (
             <ul className="error-banner-suggestions">
-              {lastError.suggestions.map((s, i) => (
+              {lastError.suggestions.map((s: string, i: number) => (
                 <li key={i}>{s}</li>
               ))}
             </ul>
@@ -191,20 +221,20 @@ export default function Dashboard({ ws }: DashboardProps) {
           <div className="info-grid">
             <div className="info-item">
               <span className="info-label">Model</span>
-              <span className="info-value text-mono">{status.model || '—'}</span>
+              <span className="info-value text-mono">{status?.model || '—'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">State</span>
-              <span className="info-value">{status.state}</span>
+              <span className="info-value">{state}</span>
             </div>
             <div className="info-item">
               <span className="info-label">PID</span>
-              <span className="info-value text-mono">{status.pid || '—'}</span>
+              <span className="info-value text-mono">{status?.pid || '—'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Load Time</span>
               <span className="info-value text-mono">
-                {status.load_time ? `${status.load_time.toFixed(1)}s` : '—'}
+                {status?.load_time ? `${status.load_time.toFixed(1)}s` : '—'}
               </span>
             </div>
             <div className="info-item">
