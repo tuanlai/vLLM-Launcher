@@ -17,7 +17,8 @@ export interface Metrics {
   timestamp: number
 }
 
-export interface StatusData {
+export interface InstanceStatus {
+  id: string
   state: string
   pid: number | null
   start_time: string | null
@@ -26,14 +27,7 @@ export interface StatusData {
   load_time: number | null
   last_error: string | null
   metrics: Metrics
-  config: {
-    model: string
-    tensor_parallel_size: number
-    port: number
-    gpu_memory_utilization: number
-    max_model_len: number | null
-    quantization: string | null
-  } | null
+  config: Record<string, any> | null
 }
 
 export interface ErrorData {
@@ -51,36 +45,21 @@ export interface WSMessage {
 }
 
 export interface UseWebSocketReturn {
-  connected: boolean
-  status: StatusData
-  logs: LogEntry[]
-  metrics: Metrics
-  metricsHistory: Metrics[]
+  instances: InstanceStatus[]
+  selectedInstanceId: string | null
+  selectInstance: (id: string) => void
+  getLogs: (instanceId: string) => LogEntry[]
+  getMetrics: (instanceId: string) => Metrics
+  getMetricsHistory: (instanceId: string) => Metrics[]
+  getStatus: (instanceId: string) => InstanceStatus | null
+  createInstance: (config: Record<string, any>) => Promise<string>
+  startInstance: (instanceId: string) => Promise<void>
+  stopInstance: (instanceId: string) => Promise<void>
+  deleteInstance: (instanceId: string) => Promise<void>
+  refreshInstances: () => Promise<void>
+  clearLogs: (instanceId: string) => void
   lastError: ErrorData | null
-  startServer: (config: Record<string, any>) => void
-  stopServer: () => void
-  clearLogs: () => void
   clearError: () => void
-}
-
-const DEFAULT_STATUS: StatusData = {
-  state: 'idle',
-  pid: null,
-  start_time: null,
-  model: null,
-  model_loaded: false,
-  load_time: null,
-  last_error: null,
-  metrics: {
-    prefill_throughput: 0,
-    decode_throughput: 0,
-    total_tokens: 0,
-    requests_active: 0,
-    requests_waiting: 0,
-    gpu_cache_usage: 0,
-    timestamp: 0,
-  },
-  config: null,
 }
 
 const DEFAULT_METRICS: Metrics = {
@@ -96,31 +75,47 @@ const DEFAULT_METRICS: Metrics = {
 const MAX_LOGS = 3000
 const MAX_METRICS_HISTORY = 120
 
+const API_BASE = import.meta.env.DEV
+  ? `http://${window.location.hostname}:8001`
+  : ''
+
 export function useWebSocket(): UseWebSocketReturn {
-  const [connected, setConnected] = useState(false)
-  const [status, setStatus] = useState<StatusData>(DEFAULT_STATUS)
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [metrics, setMetrics] = useState<Metrics>(DEFAULT_METRICS)
-  const [metricsHistory, setMetricsHistory] = useState<Metrics[]>([])
+  const [instances, setInstances] = useState<InstanceStatus[]>([])
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null)
   const [lastError, setLastError] = useState<ErrorData | null>(null)
 
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // Per-instance data stores
+  const logsMap = useRef<Map<string, LogEntry[]>>(new Map())
+  const metricsMap = useRef<Map<string, Metrics>>(new Map())
+  const metricsHistoryMap = useRef<Map<string, Metrics[]>>(new Map())
 
-  const connect = useCallback(() => {
+  // WebSocket connections per instance
+  const wsMap = useRef<Map<string, WebSocket>>(new Map())
+  const reconnectTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  // Force re-render trigger for map updates
+  const [, forceUpdate] = useState(0)
+
+  const connectInstance = useCallback((instanceId: string) => {
+    // Don't connect if already connected
+    if (wsMap.current.has(instanceId)) {
+      const existing = wsMap.current.get(instanceId)
+      if (existing?.readyState === WebSocket.OPEN || existing?.readyState === WebSocket.CONNECTING) {
+        return
+      }
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname
-    // In dev mode, connect to backend directly
     const isDev = import.meta.env.DEV
     const wsUrl = isDev
-      ? `ws://${host}:8001/ws`
-      : `${protocol}//${host}/ws`
+      ? `ws://${window.location.hostname}:8001/ws/${instanceId}`
+      : `${protocol}//${window.location.host}/ws/${instanceId}`
 
     const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
+    wsMap.current.set(instanceId, ws)
 
     ws.onopen = () => {
-      setConnected(true)
+      // Connection established
     }
 
     ws.onmessage = (event) => {
@@ -129,25 +124,42 @@ export function useWebSocket(): UseWebSocketReturn {
 
         switch (msg.type) {
           case 'status':
-            setStatus(msg.data)
-            break
-
-          case 'log':
-            setLogs((prev) => {
-              const next = [...prev, msg.data]
-              return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next
+            setInstances((prev) => {
+              const idx = prev.findIndex((i) => i.id === instanceId)
+              if (idx >= 0) {
+                const next = [...prev]
+                next[idx] = { ...next[idx], ...msg.data }
+                return next
+              }
+              // If not found, it might be a new instance - add it
+              return [...prev, msg.data]
             })
             break
 
-          case 'metrics':
-            setMetrics(msg.data)
-            setMetricsHistory((prev) => {
-              const next = [...prev, msg.data]
-              return next.length > MAX_METRICS_HISTORY
-                ? next.slice(-MAX_METRICS_HISTORY)
-                : next
-            })
+          case 'log': {
+            const currentLogs = logsMap.current.get(instanceId) || []
+            const next = [...currentLogs, msg.data]
+            logsMap.current.set(
+              instanceId,
+              next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next
+            )
+            forceUpdate((n) => n + 1)
             break
+          }
+
+          case 'metrics': {
+            metricsMap.current.set(instanceId, msg.data)
+            const currentHistory = metricsHistoryMap.current.get(instanceId) || []
+            const nextHistory = [...currentHistory, msg.data]
+            metricsHistoryMap.current.set(
+              instanceId,
+              nextHistory.length > MAX_METRICS_HISTORY
+                ? nextHistory.slice(-MAX_METRICS_HISTORY)
+                : nextHistory
+            )
+            forceUpdate((n) => n + 1)
+            break
+          }
 
           case 'error':
             setLastError(msg.data)
@@ -159,8 +171,13 @@ export function useWebSocket(): UseWebSocketReturn {
     }
 
     ws.onclose = () => {
-      setConnected(false)
-      reconnectTimer.current = setTimeout(connect, 2000)
+      wsMap.current.delete(instanceId)
+      // Auto-reconnect after 2 seconds
+      const timer = setTimeout(() => {
+        reconnectTimers.current.delete(instanceId)
+        connectInstance(instanceId)
+      }, 2000)
+      reconnectTimers.current.set(instanceId, timer)
     }
 
     ws.onerror = () => {
@@ -168,44 +185,147 @@ export function useWebSocket(): UseWebSocketReturn {
     }
   }, [])
 
-  useEffect(() => {
-    connect()
-    return () => {
-      clearTimeout(reconnectTimer.current)
-      wsRef.current?.close()
-    }
-  }, [connect])
+  const selectInstance = useCallback((id: string) => {
+    setSelectedInstanceId(id)
+    // Connect WebSocket if not already connected
+    connectInstance(id)
+  }, [connectInstance])
 
-  const startServer = useCallback((config: Record<string, any>) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'start', config }))
-    }
-  }, [])
-
-  const stopServer = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'stop' }))
+  const refreshInstances = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/instances`)
+      if (res.ok) {
+        const data = await res.json()
+        setInstances(data)
+      }
+    } catch {
+      // ignore fetch errors
     }
   }, [])
 
-  const clearLogs = useCallback(() => {
-    setLogs([])
+  const createInstance = useCallback(async (config: Record<string, any>): Promise<string> => {
+    const res = await fetch(`${API_BASE}/api/instances`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.detail || 'Failed to create instance')
+    }
+    const data = await res.json()
+    await refreshInstances()
+    return data.id
+  }, [refreshInstances])
+
+  const startInstance = useCallback(async (instanceId: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/api/instances/${instanceId}/start`, {
+      method: 'POST',
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.detail || 'Failed to start instance')
+    }
+    await refreshInstances()
+  }, [refreshInstances])
+
+  const stopInstance = useCallback(async (instanceId: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/api/instances/${instanceId}/stop`, {
+      method: 'POST',
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.detail || 'Failed to stop instance')
+    }
+    await refreshInstances()
+  }, [refreshInstances])
+
+  const deleteInstance = useCallback(async (instanceId: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/api/instances/${instanceId}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.detail || 'Failed to delete instance')
+    }
+    // Clean up local data
+    logsMap.current.delete(instanceId)
+    metricsMap.current.delete(instanceId)
+    metricsHistoryMap.current.delete(instanceId)
+    // Close WebSocket if connected
+    const ws = wsMap.current.get(instanceId)
+    if (ws) {
+      ws.close()
+      wsMap.current.delete(instanceId)
+    }
+    // Clear reconnect timer
+    const timer = reconnectTimers.current.get(instanceId)
+    if (timer) {
+      clearTimeout(timer)
+      reconnectTimers.current.delete(instanceId)
+    }
+    // Clear selection if deleted
+    setSelectedInstanceId((prev) => (prev === instanceId ? null : prev))
+    await refreshInstances()
+  }, [refreshInstances])
+
+  const getLogs = useCallback((instanceId: string): LogEntry[] => {
+    return logsMap.current.get(instanceId) || []
+  }, [])
+
+  const getMetrics = useCallback((instanceId: string): Metrics => {
+    return metricsMap.current.get(instanceId) || DEFAULT_METRICS
+  }, [])
+
+  const getMetricsHistory = useCallback((instanceId: string): Metrics[] => {
+    return metricsHistoryMap.current.get(instanceId) || []
+  }, [])
+
+  const getStatus = useCallback((instanceId: string): InstanceStatus | null => {
+    return instances.find((i) => i.id === instanceId) || null
+  }, [instances])
+
+  const clearLogs = useCallback((instanceId: string) => {
+    logsMap.current.set(instanceId, [])
+    forceUpdate((n) => n + 1)
   }, [])
 
   const clearError = useCallback(() => {
     setLastError(null)
   }, [])
 
+  // Fetch instances on mount
+  useEffect(() => {
+    refreshInstances()
+  }, [refreshInstances])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Close all WebSocket connections
+      wsMap.current.forEach((ws) => ws.close())
+      wsMap.current.clear()
+      // Clear all reconnect timers
+      reconnectTimers.current.forEach((timer) => clearTimeout(timer))
+      reconnectTimers.current.clear()
+    }
+  }, [])
+
   return {
-    connected,
-    status,
-    logs,
-    metrics,
-    metricsHistory,
-    lastError,
-    startServer,
-    stopServer,
+    instances,
+    selectedInstanceId,
+    selectInstance,
+    getLogs,
+    getMetrics,
+    getMetricsHistory,
+    getStatus,
+    createInstance,
+    startInstance,
+    stopInstance,
+    deleteInstance,
+    refreshInstances,
     clearLogs,
+    lastError,
     clearError,
   }
 }
