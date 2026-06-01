@@ -1,5 +1,7 @@
 # vLLM Launcher
 
+English | [中文](README_zh.md)
+
 A web-based launcher and manager for [vLLM](https://github.com/vllm-project/vllm) inference servers. Launch, monitor, and manage multiple vLLM instances through a clean, responsive UI.
 
 ## Features
@@ -27,8 +29,8 @@ A web-based launcher and manager for [vLLM](https://github.com/vllm-project/vllm
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-username/vllm-launcher.git
-cd vllm-launcher
+git clone https://github.com/tuanlai/vLLM-Launcher.git
+cd vLLM-Launcher
 
 # Install backend dependencies
 cd backend
