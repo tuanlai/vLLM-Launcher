@@ -12,6 +12,12 @@ class GPUInfo:
     memory_total_gb: float
     memory_used_gb: float
     memory_free_gb: float
+    temperature_c: float = 0.0
+    power_draw_w: float = 0.0
+    power_limit_w: float = 0.0
+    utilization_gpu_pct: float = 0.0
+    utilization_mem_pct: float = 0.0
+    fan_speed_pct: float = 0.0
 
 
 @dataclass
@@ -40,11 +46,19 @@ OVERHEAD_MULTIPLIER = 1.25
 class VRAMChecker:
     def get_gpus(self) -> list[GPUInfo]:
         """Run nvidia-smi and parse CSV output to get GPU info."""
+        def safe_float(val: str, default: float = 0.0) -> float:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return default
+
         try:
             result = subprocess.run(
                 [
                     "nvidia-smi",
-                    "--query-gpu=index,name,memory.total,memory.used,memory.free",
+                    "--query-gpu=index,name,memory.total,memory.used,memory.free,"
+                    "temperature.gpu,power.draw,power.limit,"
+                    "utilization.gpu,utilization.memory,fan.speed",
                     "--format=csv,noheader,nounits",
                 ],
                 capture_output=True,
@@ -54,14 +68,20 @@ class VRAMChecker:
             gpus = []
             for line in result.stdout.strip().splitlines():
                 parts = [p.strip() for p in line.split(",")]
-                if len(parts) >= 5:
+                if len(parts) >= 10:
                     gpus.append(
                         GPUInfo(
                             index=int(parts[0]),
                             name=parts[1],
-                            memory_total_gb=float(parts[2]) / 1024,
-                            memory_used_gb=float(parts[3]) / 1024,
-                            memory_free_gb=float(parts[4]) / 1024,
+                            memory_total_gb=safe_float(parts[2]) / 1024,
+                            memory_used_gb=safe_float(parts[3]) / 1024,
+                            memory_free_gb=safe_float(parts[4]) / 1024,
+                            temperature_c=safe_float(parts[5]),
+                            power_draw_w=safe_float(parts[6]),
+                            power_limit_w=safe_float(parts[7]),
+                            utilization_gpu_pct=safe_float(parts[8]),
+                            utilization_mem_pct=safe_float(parts[9]),
+                            fan_speed_pct=safe_float(parts[10]) if len(parts) > 10 else 0.0,
                         )
                     )
             return gpus

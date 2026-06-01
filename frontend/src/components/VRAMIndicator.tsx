@@ -1,11 +1,5 @@
-export interface VRAMCheckResult {
-  total_vram_gb: number
-  used_vram_gb: number
-  free_vram_gb: number
-  model_estimated_gb: number
-  feasible: boolean
-  message: string
-}
+import { useI18n } from '../i18n'
+import type { VRAMCheckResult } from '../api/types'
 
 interface VRAMIndicatorProps {
   result: VRAMCheckResult | null
@@ -13,10 +7,11 @@ interface VRAMIndicatorProps {
 }
 
 export default function VRAMIndicator({ result, gpuName }: VRAMIndicatorProps) {
+  const { t } = useI18n()
   if (!result) return null
 
   const usagePercent = result.total_vram_gb > 0
-    ? (result.model_estimated_gb / result.total_vram_gb) * 100
+    ? (result.estimated_gb / result.total_vram_gb) * 100
     : 0
 
   const barColor = usagePercent < 75
@@ -25,11 +20,13 @@ export default function VRAMIndicator({ result, gpuName }: VRAMIndicatorProps) {
       ? 'var(--warning)'
       : 'var(--error)'
 
+  const displayName = gpuName || result.gpu_name
+
   return (
     <div className="vram-indicator">
       <div className="vram-indicator-header">
-        <span className="vram-indicator-title">VRAM Estimate</span>
-        {gpuName && <span className="vram-indicator-gpu">{gpuName}</span>}
+        <span className="vram-indicator-title">{t('vram.title')}</span>
+        {displayName && <span className="vram-indicator-gpu">{displayName}</span>}
       </div>
 
       <div className="vram-indicator-bar-track">
@@ -44,19 +41,19 @@ export default function VRAMIndicator({ result, gpuName }: VRAMIndicatorProps) {
 
       <div className="vram-indicator-stats">
         <div className="vram-indicator-stat">
-          <span className="vram-indicator-stat-label">Estimated</span>
+          <span className="vram-indicator-stat-label">{t('vram.estimated')}</span>
           <span className="vram-indicator-stat-value" style={{ color: barColor }}>
-            {result.model_estimated_gb.toFixed(1)} GB
+            {result.estimated_gb.toFixed(1)} GB
           </span>
         </div>
         <div className="vram-indicator-stat">
-          <span className="vram-indicator-stat-label">Free VRAM</span>
+          <span className="vram-indicator-stat-label">{t('vram.freeVram')}</span>
           <span className="vram-indicator-stat-value">
             {result.free_vram_gb.toFixed(1)} GB
           </span>
         </div>
         <div className="vram-indicator-stat">
-          <span className="vram-indicator-stat-label">Total VRAM</span>
+          <span className="vram-indicator-stat-label">{t('vram.totalVram')}</span>
           <span className="vram-indicator-stat-value">
             {result.total_vram_gb.toFixed(1)} GB
           </span>
@@ -66,14 +63,14 @@ export default function VRAMIndicator({ result, gpuName }: VRAMIndicatorProps) {
       {!result.feasible && (
         <div className="vram-indicator-warning">
           <WarningIcon />
-          <span>{result.message || 'Model may not fit in available VRAM'}</span>
+          <span>{result.suggestion || t('vram.warning')}</span>
         </div>
       )}
 
-      {result.feasible && result.message && (
+      {result.feasible && result.suggestion && (
         <div className="vram-indicator-ok">
           <CheckIcon />
-          <span>{result.message}</span>
+          <span>{result.suggestion}</span>
         </div>
       )}
 

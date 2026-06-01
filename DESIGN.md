@@ -2,33 +2,34 @@
 version: alpha
 name: vLLM-Launcher-design
 description: |
-  A dark-themed developer tool for launching and monitoring vLLM inference servers. Near-black canvas (#101010), electric-green accent (#00d992), hairline-bordered cards, Inter + JetBrains Mono typography. Inspired by VoltAgent's design language — terminal-native, data-dense, engineered for precision.
+  A clean white-themed developer tool for launching and monitoring vLLM inference servers. White canvas (#ffffff), black primary (#000000), subtle gray hairline borders (#e5e5e5), Inter + JetBrains Mono typography. Inspired by Ollama's minimal aesthetic — bright, data-dense, and distraction-free.
 
 colors:
-  primary: "#00d992"
-  primary-soft: "#2fd6a1"
-  primary-deep: "#10b981"
-  primary-glow: "rgba(0, 217, 146, 0.15)"
-  on-primary: "#101010"
-  ink: "#f2f2f2"
-  ink-strong: "#ffffff"
-  body: "#bdbdbd"
-  mute: "#8b949e"
-  canvas: "#101010"
-  canvas-soft: "#1a1a1a"
-  canvas-softer: "#141414"
-  surface-card: "#181818"
-  surface-hover: "#1f1f1f"
-  hairline: "#2a2a2a"
-  hairline-soft: "#222222"
+  primary: "#000000"
+  primary-soft: "#171717"
+  primary-deep: "#0a0a0a"
+  primary-glow: "rgba(0, 0, 0, 0.04)"
+  primary-glow-strong: "rgba(0, 0, 0, 0.08)"
+  on-primary: "#ffffff"
+  ink: "#000000"
+  ink-strong: "#000000"
+  body: "#525252"
+  mute: "#a3a3a3"
+  canvas: "#ffffff"
+  canvas-soft: "#fafafa"
+  canvas-softer: "#f5f5f5"
+  surface-card: "#ffffff"
+  surface-hover: "#fafafa"
+  hairline: "#e5e5e5"
+  hairline-soft: "#d4d4d4"
   error: "#ef4444"
-  error-soft: "rgba(239, 68, 68, 0.15)"
+  error-soft: "rgba(239, 68, 68, 0.08)"
   warning: "#f59e0b"
-  warning-soft: "rgba(245, 158, 11, 0.15)"
-  success: "#00d992"
-  success-soft: "rgba(0, 217, 146, 0.1)"
+  warning-soft: "rgba(245, 158, 11, 0.08)"
+  success: "#10b981"
+  success-soft: "rgba(16, 185, 129, 0.08)"
   info: "#3b82f6"
-  info-soft: "rgba(59, 130, 246, 0.15)"
+  info-soft: "rgba(59, 130, 246, 0.08)"
 
 typography:
   font-sans: "Inter, system-ui, -apple-system, sans-serif"
@@ -109,12 +110,12 @@ components:
   card:
     backgroundColor: "{colors.surface-card}"
     borderColor: "{colors.hairline}"
-    borderRadius: "{rounded.md}"
+    borderRadius: "{rounded.lg}"
     padding: "{spacing.2xl}"
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
-    borderRadius: "{rounded.sm}"
+    borderRadius: "{rounded.full}"
     padding: "{spacing.sm} {spacing.lg}"
   button-danger:
     backgroundColor: "{colors.error}"
@@ -127,7 +128,7 @@ components:
     borderColor: "{colors.hairline}"
     borderRadius: "{rounded.sm}"
   input:
-    backgroundColor: "{colors.canvas-soft}"
+    backgroundColor: "{colors.canvas}"
     borderColor: "{colors.hairline}"
     textColor: "{colors.ink}"
     borderRadius: "{rounded.sm}"
@@ -137,14 +138,14 @@ components:
     boxShadow: "0 0 0 2px {colors.primary-glow}"
   badge-success:
     backgroundColor: "{colors.success-soft}"
-    textColor: "{colors.primary}"
+    textColor: "{colors.success}"
     borderRadius: "{rounded.full}"
   badge-error:
     backgroundColor: "{colors.error-soft}"
     textColor: "{colors.error}"
     borderRadius: "{rounded.full}"
   sidebar:
-    backgroundColor: "{colors.canvas-softer}"
+    backgroundColor: "{colors.canvas}"
     borderColor: "{colors.hairline}"
     width: "240px"
   sidebar-collapsed:
@@ -152,28 +153,28 @@ components:
   gauge:
     strokeWidth: 10
     radius: 80
-    trackColor: "{colors.hairline}"
+    trackColor: "{colors.canvas-softer}"
     valueColor: "{colors.primary}"
   log-viewer:
-    backgroundColor: "#0d0d0d"
+    backgroundColor: "{colors.canvas-softer}"
     fontFamily: "{typography.font-mono}"
     fontSize: "12px"
 ---
 
 ## Overview
 
-vLLM Launcher is a developer tool for launching, monitoring, and managing vLLM inference servers. The design follows VoltAgent's philosophy: a near-black canvas that reads like polished terminal output, with a single electric-green accent carrying every CTA, status indicator, and metric highlight.
+vLLM Launcher is a developer tool for launching, monitoring, and managing vLLM inference servers. The design follows Ollama's minimal white aesthetic: a bright canvas with subtle gray borders, black primary accent for all CTAs and active states, and clean typographic hierarchy.
 
-The interface is data-dense by nature — throughput gauges, real-time log streams, GPU utilization bars — but structured with generous whitespace between cards and clear typographic hierarchy to avoid visual fatigue. Every interactive element uses hairline borders on the dark canvas; depth comes from color contrast, not shadows.
+The interface is data-dense by nature — throughput gauges, real-time log streams, GPU utilization bars — but structured with generous whitespace between cards and clear typographic hierarchy. Every interactive element uses hairline borders on the white canvas; depth comes from subtle background tints and spacing, not shadows.
 
 **Key Characteristics:**
-- Near-black `{colors.canvas}` (#101010) end-to-end — the entire app is one continuous dark surface
-- Single electric-green `{colors.primary}` (#00d992) accent for all CTAs, active states, and positive metrics
-- Hairline-bordered cards (`{colors.hairline}` #2a2a2a) — no shadows, no gradients
+- White `{colors.canvas}` (#ffffff) end-to-end — the entire app is one continuous bright surface
+- Black `{colors.primary}` (#000000) accent for all CTAs, active states, and emphasis
+- Hairline-bordered cards (`{colors.hairline}` #e5e5e5) — no shadows, no gradients
 - Inter for all UI text; JetBrains Mono for code, metrics, and technical labels
 - Smooth spring animations via Framer Motion for gauge needles, page transitions, and status indicators
-- Log viewer styled as a terminal (#0d0d0d background) with color-coded severity levels
-- SVG arc gauges with gradient glow effects for throughput visualization
+- Log viewer styled with muted background (#f5f5f5) with color-coded severity levels
+- SVG arc gauges with spring animation for throughput visualization
 
 ## Layout
 
@@ -197,16 +198,19 @@ The interface is data-dense by nature — throughput gauges, real-time log strea
 
 | Role | Token | Hex |
 |------|-------|-----|
-| Page background | canvas | #101010 |
-| Card surface | surface-card | #181818 |
-| Primary CTA / Active | primary | #00d992 |
-| Headlines | ink | #f2f2f2 |
-| Body text | body | #bdbdbd |
-| Captions / Muted | mute | #8b949e |
-| Card borders | hairline | #2a2a2a |
+| Page background | canvas | #ffffff |
+| Card surface | surface-card | #ffffff |
+| Primary CTA / Active | primary | #000000 |
+| Headlines | ink | #000000 |
+| Body text | body | #525252 |
+| Captions / Muted | mute | #a3a3a3 |
+| Card borders | hairline | #e5e5e5 |
+| Hover background | surface-hover | #fafafa |
+| Subtle background | canvas-softer | #f5f5f5 |
 | Error state | error | #ef4444 |
 | Warning state | warning | #f59e0b |
-| Info / Decode metric | info | #3b82f6 |
+| Success state | success | #10b981 |
+| Info state | info | #3b82f6 |
 
 ## Animation
 

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import LogViewer from '../components/LogViewer'
 import StatusBadge from '../components/StatusBadge'
+import { useI18n } from '../i18n'
 import type { UseWebSocketReturn } from '../api/websocket'
 
 interface LogsProps {
@@ -8,6 +9,7 @@ interface LogsProps {
 }
 
 export default function Logs({ ws }: LogsProps) {
+  const { t } = useI18n()
   const { selectedInstanceId, getStatus, getLogs, clearLogs } = ws
 
   const status = selectedInstanceId ? getStatus(selectedInstanceId) : null
@@ -35,17 +37,17 @@ export default function Logs({ ws }: LogsProps) {
     >
       <div className="logs-header">
         <div>
-          <h1 className="page-title">Logs</h1>
+          <h1 className="page-title">{t('logs.title')}</h1>
           <p className="page-subtitle">
             {selectedInstanceId
-              ? `Real-time output for ${status?.model || selectedInstanceId}`
-              : 'Select an instance to view logs'}
+              ? t('logs.subtitle', { model: status?.model || selectedInstanceId })
+              : t('logs.selectInstance')}
           </p>
         </div>
         <div className="logs-actions">
           <StatusBadge state={state} />
           <button className="btn btn-ghost" onClick={handleClear}>
-            Clear
+            {t('logs.clear')}
           </button>
         </div>
       </div>

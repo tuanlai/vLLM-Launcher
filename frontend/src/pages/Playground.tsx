@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import APIPlayground from '../components/APIPlayground'
+import { useI18n } from '../i18n'
 import type { UseWebSocketReturn } from '../api/websocket'
 
 interface PlaygroundProps {
@@ -7,7 +9,11 @@ interface PlaygroundProps {
 }
 
 export default function Playground({ ws }: PlaygroundProps) {
-  const runningInstances = ws.instances.filter((i) => i.state === 'running')
+  const { t } = useI18n()
+  const runningInstances = useMemo(
+    () => ws.instances.filter((i) => i.state === 'running'),
+    [ws.instances]
+  )
 
   return (
     <motion.div
@@ -17,10 +23,10 @@ export default function Playground({ ws }: PlaygroundProps) {
       transition={{ duration: 0.25 }}
     >
       <h1 style={{ fontSize: 24, fontWeight: 600, color: 'var(--ink)', letterSpacing: -0.5 }}>
-        Playground
+        {t('playground.title')}
       </h1>
       <p style={{ fontSize: 14, color: 'var(--mute)', marginTop: 4, marginBottom: 24 }}>
-        Test your models with chat completions
+        {t('playground.subtitle')}
       </p>
       <APIPlayground instances={runningInstances} />
     </motion.div>

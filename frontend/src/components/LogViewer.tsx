@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { LogEntry } from '../api/websocket'
+import { useI18n } from '../i18n'
 
 interface LogViewerProps {
   logs: LogEntry[]
@@ -26,6 +27,7 @@ const levelLabels: Record<string, string> = {
 }
 
 export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [filter, setFilter] = useState('')
@@ -72,7 +74,7 @@ export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) 
           </svg>
           <input
             type="text"
-            placeholder="Filter logs..."
+            placeholder={t('logs.filter')}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="log-search-input"
@@ -95,7 +97,7 @@ export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) 
           ))}
         </div>
 
-        <span className="log-count">{filteredLogs.length} lines</span>
+        <span className="log-count">{t('logs.lineCount', { count: String(filteredLogs.length) })}</span>
       </div>
 
       <div
@@ -126,7 +128,7 @@ export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) 
 
         {filteredLogs.length === 0 && (
           <div className="log-empty">
-            {logs.length === 0 ? 'No logs yet. Start a vLLM server to see output.' : 'No logs match the current filter.'}
+            {logs.length === 0 ? t('logs.noLogs') : t('logs.noFilterMatch')}
           </div>
         )}
       </div>
@@ -141,7 +143,7 @@ export default function LogViewer({ logs, maxHeight = '100%' }: LogViewerProps) 
             }
           }}
         >
-          ↓ Scroll to bottom
+          ↓ {t('logs.scrollToBottom')}
         </button>
       )}
 

@@ -1,0 +1,34 @@
+[project]
+name = "vllm-launcher"
+version = "1.0.0"
+description = "Web-based vLLM inference server launcher with multi-instance management"
+license = {text = "MIT"}
+authors = [{name = "vLLM Launcher Contributors"}]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "websockets>=12.0",
+    "pydantic>=2.0",
+    "httpx>=0.25.0",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.25.0",
+    "ruff>=0.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

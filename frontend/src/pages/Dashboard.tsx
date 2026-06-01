@@ -1,7 +1,10 @@
+import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import ReactECharts from 'echarts-for-react'
 import AnimatedGauge from '../components/AnimatedGauge'
 import StatusBadge from '../components/StatusBadge'
+import GPUMonitor from '../components/GPUMonitor'
+import { useI18n } from '../i18n'
 import type { UseWebSocketReturn } from '../api/websocket'
 import { DEFAULT_METRICS } from '../api/websocket'
 
@@ -10,6 +13,7 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ ws }: DashboardProps) {
+  const { t } = useI18n()
   const { selectedInstanceId, getStatus, getMetrics, getMetricsHistory, lastError, stopInstance, clearError } = ws
 
   const status = selectedInstanceId ? getStatus(selectedInstanceId) : null
@@ -24,14 +28,22 @@ export default function Dashboard({ ws }: DashboardProps) {
     if (selectedInstanceId) stopInstance(selectedInstanceId)
   }
 
+  // Auto-select first running instance if none selected
+  useEffect(() => {
+    if (!selectedInstanceId && ws.instances.length > 0) {
+      const running = ws.instances.find((i) => i.state === 'running')
+      if (running) ws.selectInstance(running.id)
+    }
+  }, [selectedInstanceId, ws.instances, ws.selectInstance])
+
   // Build throughput chart option
   const chartOption = {
     backgroundColor: 'transparent',
     grid: {
       top: 30,
-      right: 20,
+      right: 50,
       bottom: 30,
-      left: 55,
+      left: 60,
     },
     tooltip: {
       trigger: 'axis',
@@ -41,7 +53,7 @@ export default function Dashboard({ ws }: DashboardProps) {
       axisPointer: { lineStyle: { color: '#e5e5e5' } },
     },
     legend: {
-      data: ['Prefill', 'Decode'],
+      data: [t('instance.prefill'), t('instance.decode')],
       top: 0,
       right: 0,
       textStyle: { color: '#a3a3a3', fontSize: 11 },
@@ -53,18 +65,27 @@ export default function Dashboard({ ws }: DashboardProps) {
       data: metricsHistory.map((_: unknown, i: number) => i),
       show: false,
     },
-    yAxis: {
-      type: 'value',
-      name: 'tokens/s',
-      nameTextStyle: { color: '#a3a3a3', fontSize: 10 },
-      axisLine: { show: false },
-      splitLine: { lineStyle: { color: '#f5f5f5' } },
-      axisLabel: { color: '#a3a3a3', fontSize: 10, fontFamily: 'JetBrains Mono' },
-    },
+    yAxis: [
+      {
+        type: 'value',
+        name: `${t('instance.prefill')} / ${t('instance.decode')} tok/s`,
+        nameTextStyle: { color: '#a3a3a3', fontSize: 10 },
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: '#f5f5f5' } },
+        axisLabel: { color: '#a3a3a3', fontSize: 10, fontFamily: 'JetBrains Mono' },
+      },
+      {
+        type: 'value',
+        axisLine: { show: false },
+        splitLine: { show: false },
+        axisLabel: { color: '#a3a3a3', fontSize: 10, fontFamily: 'JetBrains Mono' },
+      },
+    ],
     series: [
       {
-        name: 'Prefill',
+        name: t('instance.prefill'),
         type: 'line',
+        yAxisIndex: 0,
         smooth: true,
         symbol: 'none',
         lineStyle: { color: '#10b981', width: 2 },
@@ -81,8 +102,9 @@ export default function Dashboard({ ws }: DashboardProps) {
         data: metricsHistory.map((m: { prefill_throughput: number }) => m.prefill_throughput),
       },
       {
-        name: 'Decode',
+        name: t('instance.decode'),
         type: 'line',
+        yAxisIndex: 1,
         smooth: true,
         symbol: 'none',
         lineStyle: { color: '#3b82f6', width: 2 },
@@ -109,26 +131,6 @@ export default function Dashboard({ ws }: DashboardProps) {
     exit: { opacity: 0, y: -8 },
   }
 
-  if (!selectedInstanceId) {
-    return (
-      <motion.div
-        className="dashboard"
-        variants={pageVariants}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        transition={{ duration: 0.25 }}
-      >
-        <div className="dashboard-header">
-          <div>
-            <h1 className="page-title">Dashboard</h1>
-            <p className="page-subtitle">Select an instance from the Instances page to monitor</p>
-          </div>
-        </div>
-      </motion.div>
-    )
-  }
-
   return (
     <motion.div
       className="dashboard"
@@ -141,26 +143,56 @@ export default function Dashboard({ ws }: DashboardProps) {
       {/* Header */}
       <div className="dashboard-header">
         <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Monitor vLLM server performance in real-time</p>
+          <h1 className="page-title">{t('dashboard.title')}</h1>
+          <p className="page-subtitle">{t('dashboard.subtitle')}</p>
         </div>
         <div className="dashboard-actions">
-          <StatusBadge state={state} />
-          {(isRunning || isStarting) && (
+          {ws.instances.length > 0 && (
+            <select
+              className="input instance-select"
+              value={selectedInstanceId || ''}
+              onChange={(e) => ws.selectInstance(e.target.value)}
+            >
+              <option value="" disabled>{t('dashboard.selectInstance')}</option>
+              {ws.instances.map((inst) => (
+                <option key={inst.id} value={inst.id}>
+                  {inst.model || inst.id} — :{inst.config?.port ?? '?'} ({inst.state})
+                </option>
+              ))}
+            </select>
+          )}
+          {selectedInstanceId && <StatusBadge state={state} />}
+          {selectedInstanceId && (isRunning || isStarting) && (
             <motion.button
               className="btn btn-danger"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleStop}
             >
-              Stop Server
+              {t('dashboard.stopServer')}
             </motion.button>
           )}
         </div>
       </div>
 
+      {/* No instance selected */}
+      {!selectedInstanceId && (
+        <div className="dashboard-empty">
+          <div className="dashboard-empty__icon">⚡</div>
+          <div className="dashboard-empty__title">{t('dashboard.noInstance.title')}</div>
+          <div className="dashboard-empty__desc">
+            {ws.instances.length > 0
+              ? t('dashboard.noInstance.desc.select')
+              : t('dashboard.noInstance.desc.create')}
+          </div>
+        </div>
+      )}
+
+      {/* GPU Monitor — always visible */}
+      <GPUMonitor />
+
       {/* Error Banner */}
-      {lastError && (
+      {selectedInstanceId && lastError && (
         <motion.div
           className="error-banner"
           initial={{ opacity: 0, height: 0 }}
@@ -183,114 +215,118 @@ export default function Dashboard({ ws }: DashboardProps) {
       )}
 
       {/* Metrics Grid */}
-      <div className="metrics-grid">
-        {/* Gauges */}
-        <div className="card gauge-card">
-          <div className="card-header">
-            <span className="card-title">Prefill Speed</span>
-            <span className="card-subtitle">Prompt processing</span>
-          </div>
-          <AnimatedGauge
-            value={metrics.prefill_throughput}
-            max={5000}
-            label="tokens/s"
-            unit="tok/s"
-            color="#10b981"
-          />
-        </div>
+      {selectedInstanceId && (
+        <>
+          <div className="metrics-grid">
+            {/* Gauges */}
+            <div className="card gauge-card">
+              <div className="card-header">
+                <span className="card-title">{t('dashboard.prefillSpeed')}</span>
+                <span className="card-subtitle">{t('dashboard.prefillDesc')}</span>
+              </div>
+              <AnimatedGauge
+                value={metrics.prefill_throughput}
+                max={5000}
+                label={t('config.tokensPerSec')}
+                unit="tok/s"
+                color="#10b981"
+              />
+            </div>
 
-        <div className="card gauge-card">
-          <div className="card-header">
-            <span className="card-title">Decode Speed</span>
-            <span className="card-subtitle">Token generation</span>
-          </div>
-          <AnimatedGauge
-            value={metrics.decode_throughput}
-            max={500}
-            label="tokens/s"
-            unit="tok/s"
-            color="#3b82f6"
-          />
-        </div>
+            <div className="card gauge-card">
+              <div className="card-header">
+                <span className="card-title">{t('dashboard.decodeSpeed')}</span>
+                <span className="card-subtitle">{t('dashboard.decodeDesc')}</span>
+              </div>
+              <AnimatedGauge
+                value={metrics.decode_throughput}
+                max={500}
+                label={t('config.tokensPerSec')}
+                unit="tok/s"
+                color="#3b82f6"
+              />
+            </div>
 
-        {/* Info Cards */}
-        <div className="card info-card">
-          <div className="card-header">
-            <span className="card-title">Server Info</span>
+            {/* Info Cards */}
+            <div className="card info-card">
+              <div className="card-header">
+                <span className="card-title">{t('dashboard.serverInfo')}</span>
+              </div>
+              <div className="info-grid">
+                <div className="info-item">
+                  <span className="info-label">{t('dashboard.model')}</span>
+                  <span className="info-value text-mono">{status?.model || '—'}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">{t('dashboard.state')}</span>
+                  <span className="info-value">{state}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">{t('dashboard.pid')}</span>
+                  <span className="info-value text-mono">{status?.pid || '—'}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">{t('dashboard.loadTime')}</span>
+                  <span className="info-value text-mono">
+                    {status?.load_time ? `${status.load_time.toFixed(1)}s` : '—'}
+                  </span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">{t('dashboard.activeRequests')}</span>
+                  <span className="info-value text-mono">{metrics.requests_active}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">{t('dashboard.waiting')}</span>
+                  <span className="info-value text-mono">{metrics.requests_waiting}</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="info-grid">
-            <div className="info-item">
-              <span className="info-label">Model</span>
-              <span className="info-value text-mono">{status?.model || '—'}</span>
+
+          {/* Throughput Chart */}
+          <div className="card chart-card">
+            <div className="card-header">
+              <span className="card-title">{t('dashboard.throughput')}</span>
+              <span className="card-subtitle">{t('dashboard.throughputDesc')}</span>
             </div>
-            <div className="info-item">
-              <span className="info-label">State</span>
-              <span className="info-value">{state}</span>
-            </div>
-            <div className="info-item">
-              <span className="info-label">PID</span>
-              <span className="info-value text-mono">{status?.pid || '—'}</span>
-            </div>
-            <div className="info-item">
-              <span className="info-label">Load Time</span>
-              <span className="info-value text-mono">
-                {status?.load_time ? `${status.load_time.toFixed(1)}s` : '—'}
+            {metricsHistory.length > 0 ? (
+              <ReactECharts
+                option={chartOption}
+                style={{ height: 280 }}
+                opts={{ renderer: 'canvas' }}
+              />
+            ) : (
+              <div className="chart-empty">
+                {t('dashboard.waitingMetrics')}
+              </div>
+            )}
+          </div>
+
+          {/* GPU Cache */}
+          <div className="card gpu-card">
+            <div className="card-header">
+              <span className="card-title">{t('dashboard.gpuCache')}</span>
+              <span className="text-mono text-primary">
+                {(metrics.gpu_cache_usage * 100).toFixed(1)}%
               </span>
             </div>
-            <div className="info-item">
-              <span className="info-label">Active Requests</span>
-              <span className="info-value text-mono">{metrics.requests_active}</span>
-            </div>
-            <div className="info-item">
-              <span className="info-label">Waiting</span>
-              <span className="info-value text-mono">{metrics.requests_waiting}</span>
+            <div className="gpu-bar-container">
+              <motion.div
+                className="gpu-bar-fill"
+                animate={{ width: `${metrics.gpu_cache_usage * 100}%` }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                style={{
+                  background: metrics.gpu_cache_usage > 0.9
+                    ? '#ef4444'
+                    : metrics.gpu_cache_usage > 0.75
+                      ? '#f59e0b'
+                      : '#10b981',
+                }}
+              />
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Throughput Chart */}
-      <div className="card chart-card">
-        <div className="card-header">
-          <span className="card-title">Throughput Over Time</span>
-          <span className="card-subtitle">Real-time performance metrics</span>
-        </div>
-        {metricsHistory.length > 0 ? (
-          <ReactECharts
-            option={chartOption}
-            style={{ height: 280 }}
-            opts={{ renderer: 'canvas' }}
-          />
-        ) : (
-          <div className="chart-empty">
-            Waiting for metrics data...
-          </div>
-        )}
-      </div>
-
-      {/* GPU Cache */}
-      <div className="card gpu-card">
-        <div className="card-header">
-          <span className="card-title">GPU Cache Usage</span>
-          <span className="text-mono text-primary">
-            {(metrics.gpu_cache_usage * 100).toFixed(1)}%
-          </span>
-        </div>
-        <div className="gpu-bar-container">
-          <motion.div
-            className="gpu-bar-fill"
-            animate={{ width: `${metrics.gpu_cache_usage * 100}%` }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
-            style={{
-              background: metrics.gpu_cache_usage > 0.9
-                ? '#ef4444'
-                : metrics.gpu_cache_usage > 0.75
-                  ? '#f59e0b'
-                  : '#10b981',
-            }}
-          />
-        </div>
-      </div>
+        </>
+      )}
 
       <style>{`
         .dashboard {
@@ -317,6 +353,37 @@ export default function Dashboard({ ws }: DashboardProps) {
           display: flex;
           align-items: center;
           gap: 12px;
+        }
+        .instance-select {
+          min-width: 280px;
+          max-width: 360px;
+          font-size: 13px;
+          width: auto;
+        }
+        .dashboard-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 80px 24px;
+          background: var(--canvas);
+          border: 1px solid var(--hairline);
+          border-radius: var(--radius-lg);
+        }
+        .dashboard-empty__icon {
+          font-size: 40px;
+          margin-bottom: 16px;
+        }
+        .dashboard-empty__title {
+          font-size: 18px;
+          font-weight: 600;
+          color: var(--ink);
+          margin-bottom: 8px;
+        }
+        .dashboard-empty__desc {
+          font-size: 14px;
+          color: var(--mute);
+          text-align: center;
         }
         .error-banner {
           background: var(--error-soft);

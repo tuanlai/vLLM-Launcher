@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useI18n } from '../i18n'
 import type { InstanceStatus, Metrics } from '../api/websocket'
+import { ChevronIcon } from './icons'
 
 interface InstanceCardProps {
   instance: InstanceStatus
@@ -7,30 +9,10 @@ interface InstanceCardProps {
   onStop: () => void
   onStart: () => void
   onDelete: () => void
+  onDuplicate: () => void
   onViewLogs: () => void
   isSelected: boolean
   onSelect: () => void
-}
-
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{
-        transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
-        transition: 'transform 0.2s ease',
-      }}
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  )
 }
 
 export default function InstanceCard({
@@ -39,10 +21,12 @@ export default function InstanceCard({
   onStop,
   onStart,
   onDelete,
+  onDuplicate,
   onViewLogs,
   isSelected,
   onSelect,
 }: InstanceCardProps) {
+  const { t } = useI18n()
   const [configExpanded, setConfigExpanded] = useState(false)
 
   const state = instance.state || 'idle'
@@ -57,7 +41,7 @@ export default function InstanceCard({
         ? 'var(--error)'
         : 'var(--primary)'
 
-  const stateLabel = state.charAt(0).toUpperCase() + state.slice(1)
+  const stateLabel = t(`status.${state}` as any) || state.charAt(0).toUpperCase() + state.slice(1)
 
   const port = instance.config?.port ?? null
 
@@ -81,21 +65,21 @@ export default function InstanceCard({
       </div>
 
       {/* Model name */}
-      <div className="instance-card__model" title={instance.model || 'No model'}>
-        {instance.model || 'No model'}
+      <div className="instance-card__model" title={instance.model || t('instance.noModel')}>
+        {instance.model || t('instance.noModel')}
       </div>
 
       {/* Inline metrics — only when running */}
       {isRunning && (
         <div className="instance-card__metrics">
           <div className="instance-card__metric">
-            <span className="instance-card__metric-label">Prefill</span>
+            <span className="instance-card__metric-label">{t('instance.prefill')}</span>
             <span className="instance-card__metric-value">
               {metrics.prefill_throughput.toFixed(1)} <span className="instance-card__metric-unit">tok/s</span>
             </span>
           </div>
           <div className="instance-card__metric">
-            <span className="instance-card__metric-label">Decode</span>
+            <span className="instance-card__metric-label">{t('instance.decode')}</span>
             <span className="instance-card__metric-value">
               {metrics.decode_throughput.toFixed(1)} <span className="instance-card__metric-unit">tok/s</span>
             </span>
@@ -107,18 +91,21 @@ export default function InstanceCard({
       <div className="instance-card__actions" onClick={(e) => e.stopPropagation()}>
         {isRunning || isStarting ? (
           <button className="btn btn-ghost" onClick={onStop}>
-            Stop
+            {t('instance.stop')}
           </button>
         ) : (
           <button className="btn btn-primary" onClick={onStart} disabled={isError}>
-            Start
+            {t('instance.start')}
           </button>
         )}
         <button className="btn btn-ghost" onClick={onViewLogs}>
-          Logs
+          {t('instance.logs')}
+        </button>
+        <button className="btn btn-ghost" onClick={onDuplicate}>
+          {t('instance.duplicate')}
         </button>
         <button className="btn btn-ghost instance-card__delete" onClick={onDelete}>
-          Delete
+          {t('instance.delete')}
         </button>
       </div>
 
@@ -130,7 +117,7 @@ export default function InstanceCard({
             onClick={() => setConfigExpanded(!configExpanded)}
           >
             <ChevronIcon open={configExpanded} />
-            <span>Config Details</span>
+            <span>{t('instance.configDetails')}</span>
           </button>
           {configExpanded && (
             <div className="instance-card__config-details">

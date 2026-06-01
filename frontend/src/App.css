@@ -195,6 +195,15 @@ body {
   opacity: 0.9;
 }
 
+.btn-warning {
+  background: var(--warning);
+  color: #fff;
+  border-color: var(--warning);
+}
+.btn-warning:hover {
+  opacity: 0.9;
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--body);

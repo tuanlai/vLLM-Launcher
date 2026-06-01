@@ -11,25 +11,24 @@ class LogEvent:
     metrics: Optional[dict] = None
 
 
-# Patterns for vLLM log output
+# vLLM throughput log patterns:
+# "Avg prompt throughput: 1234.5 tokens/s"
+# "Avg prompt throughput: 1234.5 tok/s"
+# "prompt throughput: 1234.5 tokens/s"
+_PREFILL_THROUGHPUT_RE = re.compile(
+    r"(?:prompt|prefill)\s+throughput:\s+([\d.]+)\s+(?:tokens?|tok)/s",
+    re.IGNORECASE,
+)
+
+
+# Patterns for vLLM log output — only status and error detection.
+# Throughput metrics now come from Prometheus scraping.
 PATTERNS = {
-    "prefill_throughput": re.compile(
-        r"Avg prompt throughput:\s*([\d.]+)\s*tokens/s"
-    ),
-    "decode_throughput": re.compile(
-        r"Avg generation throughput:\s*([\d.]+)\s*tokens/s"
-    ),
     "server_ready": re.compile(
         r"Started server process|Uvicorn running on|Application startup complete"
     ),
     "model_loaded": re.compile(
         r"Model loaded (?:successfully)?(?:\s+in\s+([\d.]+)s)?|Loading model.*took\s+([\d.]+)"
-    ),
-    "request_count": re.compile(
-        r"Running:\s*(\d+)\s*Waiting:\s*(\d+)"
-    ),
-    "gpu_cache": re.compile(
-        r"GPU cache utilization:\s*([\d.]+)%|Cache usage:\s*([\d.]+)%"
     ),
     "oom": re.compile(
         r"CUDA out of memory|torch\.OutOfMemoryError|RuntimeError: CUDA error.*out of memory",
@@ -66,8 +65,10 @@ PATTERNS = {
 
 
 def parse_log_line(line: str) -> LogEvent:
-    """Parse a single vLLM log line and extract structured information."""
+    """Parse a single vLLM log line for status and error events.
 
+    Note: throughput metrics are now collected via Prometheus scraping.
+    """
     # Check for errors first
     for pattern_name in ["oom", "port_conflict", "model_not_found", "nccl_error",
                          "permission_error", "cuda_error", "import_error"]:
@@ -78,47 +79,6 @@ def parse_log_line(line: str) -> LogEvent:
                 raw=line,
                 metrics={"error_type": pattern_name},
             )
-
-    # Check for metrics
-    prefill_match = PATTERNS["prefill_throughput"].search(line)
-    if prefill_match:
-        return LogEvent(
-            type="metric",
-            message=line,
-            raw=line,
-            metrics={"prefill_throughput": float(prefill_match.group(1))},
-        )
-
-    decode_match = PATTERNS["decode_throughput"].search(line)
-    if decode_match:
-        return LogEvent(
-            type="metric",
-            message=line,
-            raw=line,
-            metrics={"decode_throughput": float(decode_match.group(1))},
-        )
-
-    request_match = PATTERNS["request_count"].search(line)
-    if request_match:
-        return LogEvent(
-            type="metric",
-            message=line,
-            raw=line,
-            metrics={
-                "requests_active": int(request_match.group(1)),
-                "requests_waiting": int(request_match.group(2)),
-            },
-        )
-
-    gpu_match = PATTERNS["gpu_cache"].search(line)
-    if gpu_match:
-        usage = float(gpu_match.group(1) or gpu_match.group(2))
-        return LogEvent(
-            type="metric",
-            message=line,
-            raw=line,
-            metrics={"gpu_cache_usage": usage / 100.0},
-        )
 
     # Check for status events
     if PATTERNS["server_ready"].search(line):
@@ -231,3 +191,21 @@ def get_error_details(error_type: str) -> dict:
         "suggestions": ["Check the logs for more details"],
         "severity": "critical",
     })
+
+
+def extract_prefill_throughput(line: str) -> Optional[float]:
+    """Extract prefill throughput (tokens/s) from a vLLM log line.
+
+    Returns the throughput value if found, None otherwise.
+    Matches patterns like:
+        Avg prompt throughput: 1234.5 tokens/s
+        prompt throughput: 1234.5 tok/s
+        prefill throughput: 1234.5 tokens/s
+    """
+    m = _PREFILL_THROUGHPUT_RE.search(line)
+    if m:
+        try:
+            return float(m.group(1))
+        except (ValueError, IndexError):
+            pass
+    return None

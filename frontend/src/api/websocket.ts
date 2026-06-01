@@ -1,48 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { API_BASE } from './config'
+import type { LogEntry, Metrics, InstanceStatus, ErrorData, WSMessage } from './types'
+import { DEFAULT_METRICS } from './types'
 
-export interface LogEntry {
-  timestamp: number
-  level: string
-  message: string
-  stream: string
-}
-
-export interface Metrics {
-  prefill_throughput: number
-  decode_throughput: number
-  total_tokens: number
-  requests_active: number
-  requests_waiting: number
-  gpu_cache_usage: number
-  timestamp: number
-}
-
-export interface InstanceStatus {
-  id: string
-  state: string
-  pid: number | null
-  start_time: string | null
-  model: string | null
-  model_loaded: boolean
-  load_time: number | null
-  last_error: string | null
-  metrics: Metrics
-  config: Record<string, any> | null
-}
-
-export interface ErrorData {
-  error_type: string
-  message: string
-  title: string
-  description: string
-  suggestions: string[]
-  severity: string
-}
-
-export interface WSMessage {
-  type: 'log' | 'metrics' | 'status' | 'error'
-  data: any
-}
+export type { LogEntry, Metrics, InstanceStatus, ErrorData, WSMessage }
+export { DEFAULT_METRICS }
 
 export interface UseWebSocketReturn {
   instances: InstanceStatus[]
@@ -58,26 +20,13 @@ export interface UseWebSocketReturn {
   deleteInstance: (instanceId: string) => Promise<void>
   refreshInstances: () => Promise<void>
   clearLogs: (instanceId: string) => void
+  cleanOrphanPorts: () => Promise<{ found: number; killed: number; orphans: Array<{ pid: number; port: number | null; model: string }> }>
   lastError: ErrorData | null
   clearError: () => void
 }
 
-export const DEFAULT_METRICS: Metrics = {
-  prefill_throughput: 0,
-  decode_throughput: 0,
-  total_tokens: 0,
-  requests_active: 0,
-  requests_waiting: 0,
-  gpu_cache_usage: 0,
-  timestamp: 0,
-}
-
 const MAX_LOGS = 3000
 const MAX_METRICS_HISTORY = 120
-
-const API_BASE = import.meta.env.DEV
-  ? `http://${window.location.hostname}:8001`
-  : ''
 
 export function useWebSocket(): UseWebSocketReturn {
   const [instances, setInstances] = useState<InstanceStatus[]>([])
@@ -92,6 +41,7 @@ export function useWebSocket(): UseWebSocketReturn {
   // WebSocket connections per instance
   const wsMap = useRef<Map<string, WebSocket>>(new Map())
   const reconnectTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const reconnectAttempts = useRef<Map<string, number>>(new Map())
 
   // Force re-render trigger for map updates
   const [, forceUpdate] = useState(0)
@@ -115,7 +65,8 @@ export function useWebSocket(): UseWebSocketReturn {
     wsMap.current.set(instanceId, ws)
 
     ws.onopen = () => {
-      // Connection established
+      // Reset reconnect attempts on successful connection
+      reconnectAttempts.current.set(instanceId, 0)
     }
 
     ws.onmessage = (event) => {
@@ -172,11 +123,17 @@ export function useWebSocket(): UseWebSocketReturn {
 
     ws.onclose = () => {
       wsMap.current.delete(instanceId)
-      // Auto-reconnect after 2 seconds
+      const attempts = (reconnectAttempts.current.get(instanceId) || 0) + 1
+      if (attempts > 10) {
+        reconnectAttempts.current.delete(instanceId)
+        return
+      }
+      reconnectAttempts.current.set(instanceId, attempts)
+      const delay = Math.min(1000 * Math.pow(2, attempts - 1), 30000)
       const timer = setTimeout(() => {
         reconnectTimers.current.delete(instanceId)
         connectInstance(instanceId)
-      }, 2000)
+      }, delay)
       reconnectTimers.current.set(instanceId, timer)
     }
 
@@ -196,7 +153,26 @@ export function useWebSocket(): UseWebSocketReturn {
       const res = await fetch(`${API_BASE}/api/instances`)
       if (res.ok) {
         const data = await res.json()
-        setInstances(data)
+        // Merge with WS-enriched state instead of blind replace
+        setInstances((prev) => {
+          const prevMap = new Map(prev.map((i) => [i.id, i]))
+          return data.map((d: InstanceStatus) => {
+            const existing = prevMap.get(d.id)
+            if (existing) {
+              // Preserve WS-enriched metrics
+              return { ...d, metrics: existing.metrics }
+            }
+            return d
+          })
+        })
+        // Clear stale selection if instance IDs changed (e.g., backend restart)
+        setSelectedInstanceId((prev) => {
+          if (prev && !data.some((i: InstanceStatus) => i.id === prev)) {
+            const running = data.find((i: InstanceStatus) => i.state === 'running')
+            return running?.id || null
+          }
+          return prev
+        })
       }
     } catch {
       // ignore fetch errors
@@ -215,7 +191,7 @@ export function useWebSocket(): UseWebSocketReturn {
     }
     const data = await res.json()
     await refreshInstances()
-    return data.id
+    return data.instance_id
   }, [refreshInstances])
 
   const startInstance = useCallback(async (instanceId: string): Promise<void> => {
@@ -258,12 +234,13 @@ export function useWebSocket(): UseWebSocketReturn {
       ws.close()
       wsMap.current.delete(instanceId)
     }
-    // Clear reconnect timer
+    // Clear reconnect timer and attempts
     const timer = reconnectTimers.current.get(instanceId)
     if (timer) {
       clearTimeout(timer)
       reconnectTimers.current.delete(instanceId)
     }
+    reconnectAttempts.current.delete(instanceId)
     // Clear selection if deleted
     setSelectedInstanceId((prev) => (prev === instanceId ? null : prev))
     await refreshInstances()
@@ -294,9 +271,22 @@ export function useWebSocket(): UseWebSocketReturn {
     setLastError(null)
   }, [])
 
-  // Fetch instances on mount
+  const cleanOrphanPorts = useCallback(async (): Promise<{ found: number; killed: number; orphans: Array<{ pid: number; port: number | null; model: string }> }> => {
+    const res = await fetch(`${API_BASE}/api/ports/clean`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.detail || 'Failed to clean ports')
+    }
+    const data = await res.json()
+    await refreshInstances()
+    return data
+  }, [refreshInstances])
+
+  // Fetch instances on mount and periodically
   useEffect(() => {
     refreshInstances()
+    const interval = setInterval(refreshInstances, 5000)
+    return () => clearInterval(interval)
   }, [refreshInstances])
 
   // Cleanup on unmount
@@ -308,6 +298,8 @@ export function useWebSocket(): UseWebSocketReturn {
       // Clear all reconnect timers
       reconnectTimers.current.forEach((timer) => clearTimeout(timer))
       reconnectTimers.current.clear()
+      // Clear all reconnect attempt counters
+      reconnectAttempts.current.clear()
     }
   }, [])
 
@@ -325,6 +317,7 @@ export function useWebSocket(): UseWebSocketReturn {
     deleteInstance,
     refreshInstances,
     clearLogs,
+    cleanOrphanPorts,
     lastError,
     clearError,
   }

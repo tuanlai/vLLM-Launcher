@@ -1,21 +1,24 @@
 import { motion } from 'framer-motion'
+import { useI18n } from '../i18n'
 
 interface StatusBadgeProps {
   state: string
   showLabel?: boolean
 }
 
-const stateConfig: Record<string, { label: string; color: string; bg: string }> = {
-  idle: { label: 'Idle', color: '#000000', bg: '#f5f5f5' },
-  starting: { label: 'Starting', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
-  running: { label: 'Running', color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
-  stopping: { label: 'Stopping', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
-  stopped: { label: 'Stopped', color: '#a3a3a3', bg: '#f5f5f5' },
-  error: { label: 'Error', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)' },
+const stateConfig: Record<string, { color: string; bg: string }> = {
+  idle: { color: '#000000', bg: '#f5f5f5' },
+  starting: { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
+  running: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
+  stopping: { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
+  stopped: { color: '#a3a3a3', bg: '#f5f5f5' },
+  error: { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)' },
 }
 
 export default function StatusBadge({ state, showLabel = true }: StatusBadgeProps) {
+  const { t } = useI18n()
   const config = stateConfig[state] || stateConfig.idle
+  const label = t(`status.${state}` as any) || state
 
   return (
     <div className="status-badge" style={{ background: config.bg }}>
@@ -37,8 +40,8 @@ export default function StatusBadge({ state, showLabel = true }: StatusBadgeProp
         }
       />
       {showLabel && (
-        <span style={{ color: config.color, fontWeight: 500, fontSize: 12 }}>
-          {config.label}
+        <span style={{ color: config.color, fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' }}>
+          {label}
         </span>
       )}
 

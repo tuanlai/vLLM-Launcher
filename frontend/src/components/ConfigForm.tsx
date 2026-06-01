@@ -3,11 +3,14 @@ import { motion } from 'framer-motion'
 import ModelSelector from './ModelSelector'
 import VRAMIndicator from './VRAMIndicator'
 import PresetManager from './PresetManager'
-import type { VRAMCheckResult } from './ModelSelector'
+import { ChevronIcon, CopyIcon } from './icons'
+import { useI18n } from '../i18n'
+import type { VRAMCheckResult } from '../api/types'
 
 interface ConfigFormProps {
   onSubmit: (config: Record<string, any>) => void
   disabled?: boolean
+  initialConfig?: Record<string, any> | null
 }
 
 interface ConfigState {
@@ -37,6 +40,7 @@ interface ConfigState {
   load_format: string
   lora: string
   extra_args: string
+  env_vars: { key: string; value: string; valid: boolean }[]
 }
 
 const DEFAULTS: ConfigState = {
@@ -66,6 +70,7 @@ const DEFAULTS: ConfigState = {
   load_format: 'auto',
   lora: '',
   extra_args: '',
+  env_vars: [],
 }
 
 function buildCommand(config: ConfigState): string {
@@ -143,9 +148,11 @@ function Toggle({
 function TriStateToggle({
   value,
   onChange,
+  t,
 }: {
   value: string
   onChange: (v: string) => void
+  t: (key: string) => string
 }) {
   const cycle = () => {
     if (value === 'auto') onChange('true')
@@ -153,7 +160,7 @@ function TriStateToggle({
     else onChange('auto')
   }
 
-  const label = value === 'auto' ? 'Auto' : value === 'true' ? 'Yes' : 'No'
+  const label = value === 'auto' ? t('config.auto') : value === 'true' ? t('config.on') : t('config.off')
 
   return (
     <button type="button" className="tri-state-toggle" onClick={cycle}>
@@ -162,45 +169,6 @@ function TriStateToggle({
       />
       <span className="tri-state-label">{label}</span>
     </button>
-  )
-}
-
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{
-        transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
-        transition: 'transform 0.2s ease',
-      }}
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  )
-}
-
-function CopyIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
   )
 }
 
@@ -236,8 +204,43 @@ function Section({
   )
 }
 
-export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
-  const [config, setConfig] = useState<ConfigState>({ ...DEFAULTS })
+export default function ConfigForm({ onSubmit, disabled, initialConfig }: ConfigFormProps) {
+  const { t } = useI18n()
+
+  const buildInitial = (): ConfigState => {
+    if (!initialConfig) return { ...DEFAULTS }
+    return {
+      model: initialConfig.model ?? DEFAULTS.model,
+      port: initialConfig.port ?? DEFAULTS.port,
+      host: initialConfig.host ?? DEFAULTS.host,
+      tensor_parallel_size: initialConfig.tensor_parallel_size ?? DEFAULTS.tensor_parallel_size,
+      gpu_memory_utilization: initialConfig.gpu_memory_utilization ?? DEFAULTS.gpu_memory_utilization,
+      max_model_len: initialConfig.max_model_len != null ? String(initialConfig.max_model_len) : DEFAULTS.max_model_len,
+      quantization: initialConfig.quantization ?? DEFAULTS.quantization,
+      dtype: initialConfig.dtype ?? DEFAULTS.dtype,
+      kv_cache_dtype: initialConfig.kv_cache_dtype ?? DEFAULTS.kv_cache_dtype,
+      trust_remote_code: initialConfig.trust_remote_code ?? DEFAULTS.trust_remote_code,
+      enforce_eager: initialConfig.enforce_eager ?? DEFAULTS.enforce_eager,
+      enable_chunked_prefill: initialConfig.enable_chunked_prefill ?? DEFAULTS.enable_chunked_prefill,
+      enable_auto_tool_choice: initialConfig.enable_auto_tool_choice ?? DEFAULTS.enable_auto_tool_choice,
+      tool_call_parser: initialConfig.tool_call_parser ?? DEFAULTS.tool_call_parser,
+      reasoning_parser: initialConfig.reasoning_parser ?? DEFAULTS.reasoning_parser,
+      speculative_config: initialConfig.speculative_config ?? DEFAULTS.speculative_config,
+      seed: initialConfig.seed != null ? String(initialConfig.seed) : DEFAULTS.seed,
+      max_num_seqs: initialConfig.max_num_seqs != null ? String(initialConfig.max_num_seqs) : DEFAULTS.max_num_seqs,
+      max_num_batched_tokens: initialConfig.max_num_batched_tokens != null ? String(initialConfig.max_num_batched_tokens) : DEFAULTS.max_num_batched_tokens,
+      swap_space: initialConfig.swap_space ?? DEFAULTS.swap_space,
+      block_size: initialConfig.block_size != null ? String(initialConfig.block_size) : DEFAULTS.block_size,
+      enable_prefix_caching: initialConfig.enable_prefix_caching != null ? String(initialConfig.enable_prefix_caching) : DEFAULTS.enable_prefix_caching,
+      disable_log_stats: initialConfig.disable_log_stats ?? DEFAULTS.disable_log_stats,
+      load_format: initialConfig.load_format ?? DEFAULTS.load_format,
+      lora: initialConfig.lora ?? DEFAULTS.lora,
+      extra_args: initialConfig.extra_args ?? DEFAULTS.extra_args,
+      env_vars: DEFAULTS.env_vars,
+    }
+  }
+
+  const [config, setConfig] = useState<ConfigState>(buildInitial)
   const [vramResult, setVramResult] = useState<VRAMCheckResult | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -291,6 +294,10 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
       load_format: config.load_format,
       lora: config.lora || null,
       extra_args: config.extra_args || '',
+      env_vars: config.env_vars.filter(v => v.valid && v.key.trim()).reduce((acc, v) => {
+        acc[v.key.trim()] = v.value.trim()
+        return acc
+      }, {} as Record<string, string>),
     }
     onSubmit(submitConfig)
   }
@@ -304,9 +311,9 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
           type="button"
           className="copy-btn btn btn-ghost"
           onClick={handleCopy}
-          title="Copy command"
+          title={t('config.copyCommand')}
         >
-          {copied ? 'Copied!' : <CopyIcon />}
+          {copied ? t('config.copied') : <CopyIcon />}
         </button>
       </div>
 
@@ -314,14 +321,34 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
       <div className="section">
         <PresetManager
           currentConfig={config}
-          onLoad={(loadedConfig) =>
-            setConfig((prev) => ({ ...prev, ...loadedConfig }))
-          }
+          onLoad={(loadedConfig) => {
+            let newVars: { key: string; value: string; valid: boolean }[] = []
+            if (Array.isArray(loadedConfig.env_vars)) {
+              // From preset: already in internal format
+              newVars = loadedConfig.env_vars.map((v: any) => ({
+                key: v.key || '',
+                value: v.value || '',
+                valid: v.valid !== false,
+              }))
+            } else if (loadedConfig.env_vars && typeof loadedConfig.env_vars === 'object') {
+              // From API: {KEY: VALUE} format
+              newVars = Object.entries(loadedConfig.env_vars).map(([k, v]) => ({
+                key: k,
+                value: v as string,
+                valid: true,
+              }))
+            }
+            setConfig((prev) => ({
+              ...prev,
+              ...loadedConfig,
+              env_vars: newVars.length > 0 ? newVars : prev.env_vars,
+            }))
+          }}
         />
       </div>
 
       {/* Common Parameters */}
-      <Section title="Common Parameters" defaultOpen={true}>
+      <Section title={t('config.common')} defaultOpen={true}>
         <div className="form-group">
           <ModelSelector
             value={config.model}
@@ -333,7 +360,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Port</label>
+            <label className="input-label">{t('config.port')}</label>
             <input
               type="number"
               className="input"
@@ -342,7 +369,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             />
           </div>
           <div className="form-group">
-            <label className="input-label">Host</label>
+            <label className="input-label">{t('config.host')}</label>
             <input
               type="text"
               className="input"
@@ -354,7 +381,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Tensor Parallel Size</label>
+            <label className="input-label">{t('config.tpSize')}</label>
             <div className="slider-container">
               <input
                 type="range"
@@ -371,14 +398,14 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             </div>
           </div>
           <div className="form-group">
-            <label className="input-label">GPU Memory Utilization</label>
+            <label className="input-label">{t('config.gpuMem')}</label>
             <div className="slider-container">
               <input
                 type="range"
                 className="slider"
-                min="0.5"
+                min="0.1"
                 max="1"
-                step="0.05"
+                step="0.01"
                 value={config.gpu_memory_utilization}
                 onChange={(e) =>
                   update('gpu_memory_utilization', parseFloat(e.target.value))
@@ -393,21 +420,21 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Max Model Length</label>
+            <label className="input-label">{t('config.maxModelLen')}</label>
             <input
               type="number"
               className="input"
-              placeholder="Auto"
+              placeholder={t('config.auto')}
               value={config.max_model_len}
               onChange={(e) => update('max_model_len', e.target.value)}
             />
           </div>
           <div className="form-group">
-            <label className="input-label">Seed</label>
+            <label className="input-label">{t('config.seed')}</label>
             <input
               type="number"
               className="input"
-              placeholder="Random"
+              placeholder={t('config.random')}
               value={config.seed}
               onChange={(e) => update('seed', e.target.value)}
             />
@@ -416,13 +443,13 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Quantization</label>
+            <label className="input-label">{t('config.quantization')}</label>
             <select
               className="input"
               value={config.quantization}
               onChange={(e) => update('quantization', e.target.value)}
             >
-              <option value="">None</option>
+              <option value="">{t('config.none')}</option>
               <option value="awq">AWQ</option>
               <option value="gptq">GPTQ</option>
               <option value="squeezellm">SqueezeLLM</option>
@@ -430,13 +457,13 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             </select>
           </div>
           <div className="form-group">
-            <label className="input-label">Data Type</label>
+            <label className="input-label">{t('config.dtype')}</label>
             <select
               className="input"
               value={config.dtype}
               onChange={(e) => update('dtype', e.target.value)}
             >
-              <option value="">Auto</option>
+              <option value="">{t('config.auto')}</option>
               <option value="float16">float16</option>
               <option value="bfloat16">bfloat16</option>
               <option value="float32">float32</option>
@@ -446,7 +473,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">KV Cache Dtype</label>
+            <label className="input-label">{t('config.kvCacheDtype')}</label>
             <select
               className="input"
               value={config.kv_cache_dtype}
@@ -455,14 +482,19 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
               <option value="auto">auto</option>
               <option value="fp8_e4m3">fp8_e4m3</option>
               <option value="fp8_e5m2">fp8_e5m2</option>
+              <option value="fp8">fp8</option>
+              <option value="fp8_naive">fp8_naive</option>
+              <option value="float16">float16</option>
+              <option value="bfloat16">bfloat16</option>
+              <option value="float32">float32</option>
             </select>
           </div>
           <div className="form-group">
-            <label className="input-label">Max Num Batched Tokens</label>
+            <label className="input-label">{t('config.maxBatchedTokens')}</label>
             <input
               type="number"
               className="input"
-              placeholder="Default"
+              placeholder={t('config.default')}
               value={config.max_num_batched_tokens}
               onChange={(e) => update('max_num_batched_tokens', e.target.value)}
             />
@@ -471,7 +503,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Trust Remote Code</label>
+            <label className="input-label">{t('config.trustRemoteCode')}</label>
             <Toggle
               active={config.trust_remote_code}
               onClick={() =>
@@ -480,7 +512,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             />
           </div>
           <div className="form-group">
-            <label className="input-label">Enforce Eager</label>
+            <label className="input-label">{t('config.enforceEager')}</label>
             <Toggle
               active={config.enforce_eager}
               onClick={() => update('enforce_eager', !config.enforce_eager)}
@@ -490,7 +522,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Enable Chunked Prefill</label>
+            <label className="input-label">{t('config.chunkedPrefill')}</label>
             <Toggle
               active={config.enable_chunked_prefill}
               onClick={() =>
@@ -499,7 +531,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             />
           </div>
           <div className="form-group">
-            <label className="input-label">Enable Auto Tool Choice</label>
+            <label className="input-label">{t('config.autoToolChoice')}</label>
             <Toggle
               active={config.enable_auto_tool_choice}
               onClick={() =>
@@ -511,13 +543,13 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Tool Call Parser</label>
+            <label className="input-label">{t('config.toolCallParser')}</label>
             <select
               className="input"
               value={config.tool_call_parser}
               onChange={(e) => update('tool_call_parser', e.target.value)}
             >
-              <option value="">None</option>
+              <option value="">{t('config.none')}</option>
               <option value="hermes">hermes</option>
               <option value="llama3_json">llama3_json</option>
               <option value="mistral">mistral</option>
@@ -526,13 +558,13 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             </select>
           </div>
           <div className="form-group">
-            <label className="input-label">Reasoning Parser</label>
+            <label className="input-label">{t('config.reasoningParser')}</label>
             <select
               className="input"
               value={config.reasoning_parser}
               onChange={(e) => update('reasoning_parser', e.target.value)}
             >
-              <option value="">None</option>
+              <option value="">{t('config.none')}</option>
               <option value="deepseek_r1">deepseek_r1</option>
               <option value="qwen3">qwen3</option>
             </select>
@@ -540,11 +572,11 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
         </div>
 
         <div className="form-group">
-          <label className="input-label">Speculative Config</label>
+          <label className="input-label">{t('config.speculativeConfig')}</label>
           <input
             type="text"
             className="input"
-            placeholder='e.g. {"model": "path/to/draft", "num_speculative_tokens": 5}'
+            placeholder={t('config.speculativePlaceholder')}
             value={config.speculative_config}
             onChange={(e) => update('speculative_config', e.target.value)}
           />
@@ -552,13 +584,13 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
       </Section>
 
       {/* Performance Tuning */}
-      <Section title="Performance Tuning" defaultOpen={false}>
+      <Section title={t('config.performance')} defaultOpen={false}>
         <div className="form-group">
-          <label className="input-label">Max Num Seqs</label>
+          <label className="input-label">{t('config.maxNumSeqs')}</label>
           <input
             type="number"
             className="input"
-            placeholder="Default"
+            placeholder={t('config.default')}
             value={config.max_num_seqs}
             onChange={(e) => update('max_num_seqs', e.target.value)}
           />
@@ -566,7 +598,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Swap Space (GB)</label>
+            <label className="input-label">{t('config.swapSpace')}</label>
             <input
               type="number"
               className="input"
@@ -577,11 +609,11 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             />
           </div>
           <div className="form-group">
-            <label className="input-label">Block Size</label>
+            <label className="input-label">{t('config.blockSize')}</label>
             <input
               type="number"
               className="input"
-              placeholder="Default"
+              placeholder={t('config.default')}
               value={config.block_size}
               onChange={(e) => update('block_size', e.target.value)}
             />
@@ -590,14 +622,15 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
 
         <div className="form-row">
           <div className="form-group">
-            <label className="input-label">Enable Prefix Caching</label>
+            <label className="input-label">{t('config.prefixCaching')}</label>
             <TriStateToggle
               value={config.enable_prefix_caching}
               onChange={(v) => update('enable_prefix_caching', v)}
+              t={t as (key: string) => string}
             />
           </div>
           <div className="form-group">
-            <label className="input-label">Disable Log Stats</label>
+            <label className="input-label">{t('config.disableLogStats')}</label>
             <Toggle
               active={config.disable_log_stats}
               onClick={() =>
@@ -608,7 +641,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
         </div>
 
         <div className="form-group">
-          <label className="input-label">Load Format</label>
+          <label className="input-label">{t('config.loadFormat')}</label>
           <select
             className="input"
             value={config.load_format}
@@ -624,20 +657,20 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
       </Section>
 
       {/* Advanced */}
-      <Section title="Advanced" defaultOpen={false}>
+      <Section title={t('config.advanced')} defaultOpen={false}>
         <div className="form-group">
-          <label className="input-label">LoRA</label>
+          <label className="input-label">{t('config.lora')}</label>
           <input
             type="text"
             className="input"
-            placeholder="LoRA adapter path or name"
+            placeholder={t('config.loraPlaceholder')}
             value={config.lora}
             onChange={(e) => update('lora', e.target.value)}
           />
         </div>
 
         <div className="form-group">
-          <label className="input-label">Additional Arguments</label>
+          <label className="input-label">{t('config.extraArgs')}</label>
           <textarea
             className="input"
             placeholder="--enforce-eager --disable-log-requests"
@@ -645,6 +678,60 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
             onChange={(e) => update('extra_args', e.target.value)}
             rows={3}
           />
+        </div>
+
+        <div className="form-group">
+          <label className="input-label">{t('config.envVars')}</label>
+          <p className="hint-text">{t('config.envVarsHint')}</p>
+          <div className="env-vars-list">
+            {config.env_vars.map((env, idx) => (
+              <div key={idx} className="env-var-row">
+                <input
+                  type="text"
+                  className="input env-var-key"
+                  placeholder="KEY"
+                  value={env.key}
+                  onChange={(e) => {
+                    const newVars = [...config.env_vars]
+                    newVars[idx] = { ...newVars[idx], key: e.target.value, valid: true }
+                    update('env_vars', newVars)
+                  }}
+                />
+                <span className="env-var-eq">=</span>
+                <input
+                  type="text"
+                  className="input env-var-value"
+                  placeholder="value"
+                  value={env.value}
+                  onChange={(e) => {
+                    const newVars = [...config.env_vars]
+                    newVars[idx] = { ...newVars[idx], value: e.target.value, valid: true }
+                    update('env_vars', newVars)
+                  }}
+                />
+                <button
+                  type="button"
+                  className="env-var-remove"
+                  onClick={() => {
+                    const newVars = config.env_vars.filter((_, i) => i !== idx)
+                    update('env_vars', newVars)
+                  }}
+                  title={t('config.remove')}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn btn-ghost env-var-add"
+              onClick={() => {
+                update('env_vars', [...config.env_vars, { key: '', value: '', valid: true }])
+              }}
+            >
+              + {t('config.envVarAdd')}
+            </button>
+          </div>
         </div>
       </Section>
 
@@ -657,7 +744,7 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
         whileTap={{ scale: 0.98 }}
       >
         <PlayIcon />
-        Launch vLLM
+        {t('config.launch')}
       </motion.button>
 
       <style>{`
@@ -761,6 +848,54 @@ export default function ConfigForm({ onSubmit, disabled }: ConfigFormProps) {
           padding: 14px;
           font-size: 14px;
           margin-top: 8px;
+        }
+        .hint-text {
+          font-size: 11px;
+          color: var(--mute);
+          margin: 4px 0 8px;
+        }
+        .env-vars-list {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .env-var-row {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .env-var-key {
+          flex: 1;
+          min-width: 0;
+        }
+        .env-var-value {
+          flex: 1.5;
+          min-width: 0;
+        }
+        .env-var-eq {
+          color: var(--mute);
+          font-weight: 600;
+          flex-shrink: 0;
+        }
+        .env-var-remove {
+          background: none;
+          border: 1px solid var(--hairline);
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          color: var(--mute);
+          padding: 4px 8px;
+          font-size: 12px;
+          flex-shrink: 0;
+          transition: color 0.15s, background 0.15s;
+        }
+        .env-var-remove:hover {
+          color: var(--error);
+          background: var(--error-soft);
+        }
+        .env-var-add {
+          font-size: 12px;
+          padding: 6px 12px;
+          justify-content: center;
         }
       `}</style>
     </form>

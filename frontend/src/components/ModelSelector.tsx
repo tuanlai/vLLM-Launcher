@@ -1,21 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-
-export interface ModelInfo {
-  name: string
-  path: string
-  size_gb: number
-  format: string
-  param_count: string | null
-}
-
-export interface VRAMCheckResult {
-  total_vram_gb: number
-  used_vram_gb: number
-  free_vram_gb: number
-  model_estimated_gb: number
-  feasible: boolean
-  message: string
-}
+import FileBrowser from './FileBrowser'
+import type { ModelInfo, VRAMCheckResult } from '../api/types'
+import { API_BASE } from '../api/config'
+import { RefreshIcon, BrowseIcon } from './icons'
+import { useI18n } from '../i18n'
 
 interface ModelSelectorProps {
   value: string
@@ -23,11 +11,8 @@ interface ModelSelectorProps {
   onVRAMCheck?: (result: VRAMCheckResult) => void
 }
 
-const API_BASE = import.meta.env.DEV
-  ? `http://${window.location.hostname}:8001`
-  : ''
-
 export default function ModelSelector({ value, onChange, onVRAMCheck }: ModelSelectorProps) {
+  const { t } = useI18n()
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,17 +20,21 @@ export default function ModelSelector({ value, onChange, onVRAMCheck }: ModelSel
   const [open, setOpen] = useState(false)
   const [manualMode, setManualMode] = useState(false)
   const [vramLoading, setVramLoading] = useState(false)
+  const [showBrowser, setShowBrowser] = useState(false)
+  const [scanDir, setScanDir] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const scanModels = async () => {
+  const scanModels = async (dir?: string) => {
+    const path = dir || scanDir
+    if (!path) return
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/models/scan?path=/home/tuanlai/Models`)
+      const res = await fetch(`${API_BASE}/api/models/scan?path=${encodeURIComponent(path)}`)
       if (!res.ok) throw new Error('Failed to scan models')
       const data = await res.json()
-      setModels(data.models || [])
+      setModels(Array.isArray(data) ? data : data.models || [])
     } catch (err: any) {
       setError(err.message || 'Failed to load models')
     } finally {
@@ -54,7 +43,17 @@ export default function ModelSelector({ value, onChange, onVRAMCheck }: ModelSel
   }
 
   useEffect(() => {
-    scanModels()
+    // Fetch default model directory from settings
+    fetch(`${API_BASE}/api/settings`)
+      .then((res) => res.json())
+      .then((data) => {
+        const dir = data.model_scan_path || ''
+        if (dir) {
+          setScanDir(dir)
+          scanModels(dir)
+        }
+      })
+      .catch(() => {})
   }, [])
 
   // Close dropdown on outside click
@@ -126,13 +125,13 @@ export default function ModelSelector({ value, onChange, onVRAMCheck }: ModelSel
 
   return (
     <div className="model-selector" ref={containerRef}>
-      <label className="input-label">Model</label>
+      <label className="input-label">{t('config.model')}</label>
       <div className="model-selector-input-wrap">
         <input
           ref={inputRef}
           type="text"
           className="input model-selector-input"
-          placeholder="Search models or type a custom path..."
+          placeholder={t('config.searchModels')}
           value={manualMode ? value : search}
           onChange={(e) => {
             if (manualMode) {
@@ -151,19 +150,41 @@ export default function ModelSelector({ value, onChange, onVRAMCheck }: ModelSel
           type="button"
           className="btn btn-ghost model-selector-refresh"
           onClick={(e) => { e.stopPropagation(); scanModels() }}
-          title="Refresh model list"
+          title={t('config.refreshModels')}
           disabled={loading}
         >
           <RefreshIcon spinning={loading} />
         </button>
+        <button
+          type="button"
+          className="btn btn-ghost model-selector-refresh"
+          onClick={(e) => { e.stopPropagation(); setShowBrowser(true) }}
+          title={t('config.browseFiles')}
+        >
+          <BrowseIcon />
+        </button>
       </div>
+
+      {showBrowser && (
+        <FileBrowser
+          mode="dir"
+          initialPath={value || scanDir || '/home'}
+          onSelect={(path) => {
+            onChange(path)
+            setSearch(path.split('/').pop() || path)
+            setManualMode(false)
+            setShowBrowser(false)
+          }}
+          onClose={() => setShowBrowser(false)}
+        />
+      )}
 
       {open && !manualMode && (
         <div className="model-selector-dropdown">
           {error && <div className="model-selector-error">{error}</div>}
 
           {Object.keys(groupedModels).length === 0 && !loading && !error && (
-            <div className="model-selector-empty">No models found</div>
+            <div className="model-selector-empty">{t('config.noModels')}</div>
           )}
 
           {Object.entries(groupedModels).map(([group, items]) => (
@@ -199,13 +220,13 @@ export default function ModelSelector({ value, onChange, onVRAMCheck }: ModelSel
               setTimeout(() => inputRef.current?.focus(), 50)
             }}
           >
-            <span className="model-selector-item-name">Enter custom model path...</span>
+            <span className="model-selector-item-name">{t('config.customModelPath')}</span>
           </button>
         </div>
       )}
 
       {vramLoading && (
-        <div className="model-selector-vram-loading">Checking VRAM requirements...</div>
+        <div className="model-selector-vram-loading">{t('config.checkingVRAM')}</div>
       )}
 
       <style>{`
@@ -337,23 +358,5 @@ export default function ModelSelector({ value, onChange, onVRAMCheck }: ModelSel
         }
       `}</style>
     </div>
-  )
-}
-
-function RefreshIcon({ spinning }: { spinning: boolean }) {
-  return (
-    <svg
-      className={spinning ? 'spin' : ''}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="23 4 23 10 17 10" />
-      <polyline points="1 20 1 14 7 14" />
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-    </svg>
   )
 }

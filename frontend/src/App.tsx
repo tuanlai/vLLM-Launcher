@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import Sidebar from './components/Sidebar'
+import ErrorBoundary from './components/ErrorBoundary'
 import Dashboard from './pages/Dashboard'
 import Instances from './pages/Instances'
 import Logs from './pages/Logs'
@@ -17,12 +18,12 @@ function App() {
       <main className="main-content">
         <AnimatePresence mode="wait">
           <Routes>
-            <Route path="/" element={<Dashboard ws={ws} />} />
-            <Route path="/instances" element={<Instances ws={ws} />} />
-            <Route path="/logs" element={<Logs ws={ws} />} />
-            <Route path="/playground" element={<Playground ws={ws} />} />
-            <Route path="/settings" element={<Settings ws={ws} />} />
-          </Routes>
+              <Route path="/" element={<ErrorBoundary><Dashboard ws={ws} /></ErrorBoundary>} />
+              <Route path="/instances" element={<ErrorBoundary><Instances ws={ws} /></ErrorBoundary>} />
+              <Route path="/logs" element={<ErrorBoundary><Logs ws={ws} /></ErrorBoundary>} />
+              <Route path="/playground" element={<ErrorBoundary><Playground ws={ws} /></ErrorBoundary>} />
+              <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+            </Routes>
         </AnimatePresence>
       </main>
     </div>

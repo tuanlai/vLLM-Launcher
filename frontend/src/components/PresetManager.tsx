@@ -1,21 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
-
-export interface Preset {
-  name: string
-  config: Record<string, any>
-  created_at: string
-}
+import type { Preset } from '../api/types'
+import { API_BASE } from '../api/config'
+import { PlusIcon, TrashIcon, UpdateIcon } from './icons'
+import { useI18n } from '../i18n'
 
 interface PresetManagerProps {
   currentConfig: Record<string, any>
   onLoad: (config: Record<string, any>) => void
 }
 
-const API_BASE = import.meta.env.DEV
-  ? `http://${window.location.hostname}:8001`
-  : ''
-
 export default function PresetManager({ currentConfig, onLoad }: PresetManagerProps) {
+  const { t } = useI18n()
   const [presets, setPresets] = useState<Preset[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -23,6 +18,7 @@ export default function PresetManager({ currentConfig, onLoad }: PresetManagerPr
   const [saveName, setSaveName] = useState('')
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [confirmOverwrite, setConfirmOverwrite] = useState<string | null>(null)
 
   const fetchPresets = useCallback(async () => {
     setLoading(true)
@@ -67,6 +63,27 @@ export default function PresetManager({ currentConfig, onLoad }: PresetManagerPr
     }
   }
 
+  const handleUpdate = async (name: string) => {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/presets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, config: currentConfig }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Failed to update preset')
+      }
+      await fetchPresets()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update preset')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleDelete = async (name: string) => {
     setDeleting(name)
     setError(null)
@@ -86,14 +103,14 @@ export default function PresetManager({ currentConfig, onLoad }: PresetManagerPr
   return (
     <div className="preset-manager">
       <div className="preset-manager-header">
-        <span className="preset-manager-title">Saved Presets</span>
+        <span className="preset-manager-title">{t('preset.savedPresets')}</span>
         <button
           type="button"
           className="btn btn-ghost preset-manager-save-btn"
           onClick={() => setShowSaveDialog(!showSaveDialog)}
         >
           <PlusIcon />
-          Save current
+          {t('preset.saveCurrent')}
         </button>
       </div>
 
@@ -102,7 +119,7 @@ export default function PresetManager({ currentConfig, onLoad }: PresetManagerPr
           <input
             type="text"
             className="input"
-            placeholder="Preset name..."
+            placeholder={t('preset.namePlaceholder')}
             value={saveName}
             onChange={(e) => setSaveName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
@@ -114,24 +131,24 @@ export default function PresetManager({ currentConfig, onLoad }: PresetManagerPr
             onClick={handleSave}
             disabled={saving || !saveName.trim()}
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? t('preset.saving') : t('preset.save')}
           </button>
           <button
             type="button"
             className="btn btn-ghost"
             onClick={() => { setShowSaveDialog(false); setSaveName('') }}
           >
-            Cancel
+            {t('preset.cancel')}
           </button>
         </div>
       )}
 
       {error && <div className="preset-manager-error">{error}</div>}
 
-      {loading && <div className="preset-manager-loading">Loading presets...</div>}
+      {loading && <div className="preset-manager-loading">{t('preset.loading')}</div>}
 
       {!loading && presets.length === 0 && (
-        <div className="preset-manager-empty">No saved presets yet</div>
+        <div className="preset-manager-empty">{t('preset.noPresets')}</div>
       )}
 
       <div className="preset-manager-list">
@@ -141,19 +158,49 @@ export default function PresetManager({ currentConfig, onLoad }: PresetManagerPr
               type="button"
               className="preset-manager-item-main"
               onClick={() => onLoad(preset.config)}
-              title="Load this preset"
+              title={t('preset.loadPreset')}
             >
               <span className="preset-manager-item-name">{preset.name}</span>
               <span className="preset-manager-item-detail">
-                {Object.keys(preset.config).length} settings
+                {Object.keys(preset.config).length} {t('preset.settings')}
               </span>
             </button>
+            {confirmOverwrite === preset.name ? (
+              <div className="preset-manager-confirm">
+                <span>{t('preset.confirmOverwrite')}</span>
+                <button
+                  type="button"
+                  className="btn btn-primary preset-manager-confirm-yes"
+                  onClick={(e) => { e.stopPropagation(); handleUpdate(preset.name); setConfirmOverwrite(null) }}
+                  disabled={saving}
+                >
+                  {saving ? '...' : t('preset.yes')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost preset-manager-confirm-no"
+                  onClick={(e) => { e.stopPropagation(); setConfirmOverwrite(null) }}
+                >
+                  {t('preset.no')}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="preset-manager-item-update"
+                onClick={(e) => { e.stopPropagation(); setConfirmOverwrite(preset.name) }}
+                disabled={saving}
+                title={t('preset.overwrite')}
+              >
+                <UpdateIcon />
+              </button>
+            )}
             <button
               type="button"
               className="preset-manager-item-delete"
               onClick={(e) => { e.stopPropagation(); handleDelete(preset.name) }}
               disabled={deleting === preset.name}
-              title="Delete preset"
+              title={t('preset.delete')}
             >
               <TrashIcon />
             </button>
@@ -204,6 +251,14 @@ export default function PresetManager({ currentConfig, onLoad }: PresetManagerPr
           color: var(--error);
           border-radius: var(--radius-sm);
           font-size: 12px;
+          margin-bottom: 8px;
+        }
+        .preset-manager-hint {
+          padding: 6px 12px;
+          background: var(--warning-soft, #fffbeb);
+          color: var(--warning, #f59e0b);
+          border-radius: var(--radius-sm);
+          font-size: 11px;
           margin-bottom: 8px;
         }
         .preset-manager-loading, .preset-manager-empty {
@@ -279,31 +334,52 @@ export default function PresetManager({ currentConfig, onLoad }: PresetManagerPr
           opacity: 0.4;
           cursor: not-allowed;
         }
-        .preset-manager-item-delete svg {
+        .preset-manager-item-update {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 12px;
+          background: none;
+          border: none;
+          border-left: 1px solid var(--hairline);
+          cursor: pointer;
+          color: var(--mute);
+          transition: color 0.15s, background 0.15s;
+          opacity: 0;
+        }
+        .preset-manager-item:hover .preset-manager-item-update {
+          opacity: 1;
+        }
+        .preset-manager-item-update:hover {
+          color: var(--primary);
+          background: var(--primary-glow);
+        }
+        .preset-manager-item-update:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .preset-manager-item-delete svg,
+        .preset-manager-item-update svg {
           width: 14px;
           height: 14px;
         }
+        .preset-manager-confirm {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 0 8px;
+          border-left: 1px solid var(--hairline);
+          font-size: 11px;
+          color: var(--warning, #f59e0b);
+          white-space: nowrap;
+        }
+        .preset-manager-confirm-yes,
+        .preset-manager-confirm-no {
+          font-size: 11px;
+          padding: 2px 8px;
+          border-radius: var(--radius-sm);
+        }
       `}</style>
     </div>
-  )
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  )
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <line x1="10" y1="11" x2="10" y2="17" />
-      <line x1="14" y1="11" x2="14" y2="17" />
-    </svg>
   )
 }

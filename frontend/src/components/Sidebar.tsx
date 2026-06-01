@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useI18n } from '../i18n'
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: DashboardIcon },
-  { path: '/instances', label: 'Instances', icon: InstancesIcon },
-  { path: '/logs', label: 'Logs', icon: LogsIcon },
-  { path: '/playground', label: 'Playground', icon: PlaygroundIcon },
-  { path: '/settings', label: 'Settings', icon: SettingsIcon },
+  { path: '/', labelKey: 'nav.dashboard' as const, icon: DashboardIcon },
+  { path: '/instances', labelKey: 'nav.instances' as const, icon: InstancesIcon },
+  { path: '/logs', labelKey: 'nav.logs' as const, icon: LogsIcon },
+  { path: '/playground', labelKey: 'nav.playground' as const, icon: PlaygroundIcon },
+  { path: '/settings', labelKey: 'nav.settings' as const, icon: SettingsIcon },
 ]
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
+  const { t } = useI18n()
 
   return (
     <motion.nav
@@ -38,7 +40,7 @@ export default function Sidebar() {
         <button
           className="sidebar-toggle"
           onClick={() => setCollapsed(!collapsed)}
-          title={collapsed ? 'Expand' : 'Collapse'}
+          title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
         >
           <ChevronIcon direction={collapsed ? 'right' : 'left'} />
         </button>
@@ -63,7 +65,7 @@ export default function Sidebar() {
                   exit={{ opacity: 0, width: 0 }}
                   transition={{ duration: 0.15 }}
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </motion.span>
               )}
             </AnimatePresence>
