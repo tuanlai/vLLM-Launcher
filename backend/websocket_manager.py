@@ -44,6 +44,7 @@ class WebSocketManager:
             try:
                 await client.send_text(payload)
             except Exception:
+                logger.debug("Removing dead WebSocket client")
                 dead.add(client)
         clients.difference_update(dead)
 

@@ -95,10 +95,10 @@ export default function Instances({ ws }: InstancesProps) {
       {/* Header */}
       <div className="instances-header">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 600, color: 'var(--ink)', letterSpacing: -0.5 }}>
+          <h1 className="page-title">
             {t('instances.title')}
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--mute)', marginTop: 4 }}>
+          <p className="page-subtitle">
             {t('instances.subtitle')}
           </p>
         </div>

@@ -58,9 +58,6 @@ PATTERNS = {
         r"ModuleNotFoundError|ImportError",
         re.IGNORECASE,
     ),
-    "process_exit": re.compile(
-        r"Process exited with code (\d+)|Killed|SIGKILL|SIGTERM"
-    ),
 }
 
 

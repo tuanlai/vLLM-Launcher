@@ -39,9 +39,9 @@ def create_models_router(model_scanner: ModelScanner, vram_checker: VRAMChecker)
                        "Path should contain a pattern like '7B' or '13b'.",
             )
         param_billions = float(match.group(1))
-        result = vram_checker.check_feasibility(param_billions, dtype=dtype, tp_size=tp_size)
+        result = await vram_checker.check_feasibility(param_billions, dtype=dtype, tp_size=tp_size)
 
-        gpus = vram_checker.get_gpus()
+        gpus = await vram_checker.get_gpus()
         total_vram = sum(g.memory_total_gb for g in gpus) if gpus else 0.0
         used_vram = sum(g.memory_used_gb for g in gpus) if gpus else 0.0
         free_vram = sum(g.memory_free_gb for g in gpus) if gpus else 0.0

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from metrics_scraper import parse_prometheus_text, scrape_full_metrics
+from metrics_scraper import scrape_full_metrics
 
 
 REALISTIC_PROMETHEUS_TEXT = """\
@@ -21,36 +21,6 @@ vllm:num_requests_waiting{engine="0",model_name="test-model"} 1.0
 # TYPE vllm:kv_cache_usage_perc gauge
 vllm:kv_cache_usage_perc{engine="0",model_name="test-model"} 0.42
 """
-
-
-class TestParsePrometheusText:
-    def test_realistic_text(self):
-        result = parse_prometheus_text(REALISTIC_PROMETHEUS_TEXT)
-        assert result.prompt_tokens == 12345
-        assert result.generation_tokens == 67890
-
-    def test_scientific_notation(self):
-        text = 'vllm:prompt_tokens_total 1.111753e+06\nvllm:generation_tokens_total 2.5e+04\n'
-        result = parse_prometheus_text(text)
-        assert result.prompt_tokens == 1111753
-        assert result.generation_tokens == 25000
-
-    def test_empty_text(self):
-        result = parse_prometheus_text("")
-        assert result.prompt_tokens == 0
-        assert result.generation_tokens == 0
-
-    def test_no_matching_metrics(self):
-        text = "some_unrelated_metric 42\nanother_metric 100\n"
-        result = parse_prometheus_text(text)
-        assert result.prompt_tokens == 0
-        assert result.generation_tokens == 0
-
-    def test_with_label_sets(self):
-        text = 'vllm:prompt_tokens_total{engine="0",model_name="model-a"} 999\nvllm:generation_tokens_total{engine="0",model_name="model-a"} 500\n'
-        result = parse_prometheus_text(text)
-        assert result.prompt_tokens == 999
-        assert result.generation_tokens == 500
 
 
 class TestScrapeFullMetrics:

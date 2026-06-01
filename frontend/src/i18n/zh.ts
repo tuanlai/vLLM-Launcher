@@ -71,7 +71,6 @@ const zh: Record<TranslationKey, string> = {
   // 测试台
   'playground.title': '测试台',
   'playground.subtitle': '使用聊天补全测试你的模型',
-  'playground.instance': '实例',
   'playground.noRunning': '没有运行中的实例',
   'playground.maxTokens': '最大 Token 数',
   'playground.temperature': '温度',
@@ -80,15 +79,12 @@ const zh: Record<TranslationKey, string> = {
   'playground.systemPlaceholder': '你是一个有用的助手...',
   'playground.emptyHint': '发送消息开始与模型对话。',
   'playground.thinking': '思考中...',
-  'playground.dismiss': '关闭',
   'playground.latency': '延迟',
   'playground.promptTokens': '提示 Token 数',
   'playground.completionTokens': '生成 Token 数',
   'playground.model': '模型',
   'playground.inputPlaceholder': '输入消息...（Shift+Enter 换行）',
   'playground.clear': '清空',
-  'playground.send': '发送',
-  'playground.sending': '发送中...',
   'playground.parameters': '参数',
 
   // 设置
@@ -112,7 +108,6 @@ const zh: Record<TranslationKey, string> = {
   'status.error': '错误',
 
   // 配置表单
-  'config.commandPreview': '命令预览',
   'config.common': '常用参数',
   'config.port': '端口',
   'config.host': '主机',
@@ -180,9 +175,6 @@ const zh: Record<TranslationKey, string> = {
   'settings.notDetected': '未检测到',
   'settings.currentPath': '当前',
 
-  // 设置提示
-  'settings.serverRunning': '服务器{state}中。请先停止服务再修改设置。',
-
   // 文件浏览
   'fileBrowser.title': '浏览文件',
   'fileBrowser.select': '选择',
@@ -236,7 +228,6 @@ const zh: Record<TranslationKey, string> = {
   'config.customModelPath': '输入自定义模型路径...',
   'config.checkingVRAM': '检查显存需求中...',
   'config.copyCommand': '复制命令',
-  'config.default': '默认',
   'config.loraPlaceholder': 'LoRA 适配器路径或名称',
   'config.speculativePlaceholder': '例如 {"model": "path/to/draft", "num_speculative_tokens": 5}',
   'config.remove': '移除',

@@ -1,6 +1,6 @@
 """GPU VRAM checking and model VRAM estimation."""
 
-import subprocess
+import asyncio
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -41,10 +41,11 @@ BYTES_PER_PARAM = {
 }
 
 OVERHEAD_MULTIPLIER = 1.25
+VRAM_HEADROOM = 0.95  # Reserve 5% for CUDA context and fragmentation
 
 
 class VRAMChecker:
-    def get_gpus(self) -> list[GPUInfo]:
+    async def get_gpus(self) -> list[GPUInfo]:
         """Run nvidia-smi and parse CSV output to get GPU info."""
         def safe_float(val: str, default: float = 0.0) -> float:
             try:
@@ -53,20 +54,20 @@ class VRAMChecker:
                 return default
 
         try:
-            result = subprocess.run(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=index,name,memory.total,memory.used,memory.free,"
-                    "temperature.gpu,power.draw,power.limit,"
-                    "utilization.gpu,utilization.memory,fan.speed",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
+            proc = await asyncio.create_subprocess_exec(
+                "nvidia-smi",
+                "--query-gpu=index,name,memory.total,memory.used,memory.free,"
+                "temperature.gpu,power.draw,power.limit,"
+                "utilization.gpu,utilization.memory,fan.speed",
+                "--format=csv,noheader,nounits",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            stdout, _ = await proc.communicate()
+            if proc.returncode != 0:
+                return []
             gpus = []
-            for line in result.stdout.strip().splitlines():
+            for line in stdout.decode().strip().splitlines():
                 parts = [p.strip() for p in line.split(",")]
                 if len(parts) >= 10:
                     gpus.append(
@@ -85,7 +86,7 @@ class VRAMChecker:
                         )
                     )
             return gpus
-        except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+        except (OSError, ValueError):
             return []
 
     def estimate_vram_gb(self, param_billions: float, dtype: str = "float16") -> float:
@@ -94,7 +95,7 @@ class VRAMChecker:
         raw_gb = param_billions * 1e9 * bytes_per / (1024**3)
         return raw_gb * OVERHEAD_MULTIPLIER
 
-    def check_feasibility(
+    async def check_feasibility(
         self,
         param_billions: float,
         dtype: str = "float16",
@@ -103,7 +104,7 @@ class VRAMChecker:
     ) -> VRAMCheck:
         """Check if a model fits in available VRAM."""
         if available_gb is None:
-            gpus = self.get_gpus()
+            gpus = await self.get_gpus()
             if not gpus:
                 return VRAMCheck(
                     feasible=False,
@@ -112,12 +113,13 @@ class VRAMChecker:
                     utilization_pct=0.0,
                     suggestion="No GPUs detected",
                 )
-            available_gb = sum(g.memory_free_gb for g in gpus)
+            # Use minimum free VRAM across all GPUs (TP requires all GPUs to fit their shard)
+            available_gb = min(g.memory_free_gb for g in gpus)
 
         estimated = self.estimate_vram_gb(param_billions, dtype)
         estimated_per_gpu = estimated / tp_size
         utilization = (estimated_per_gpu / available_gb) * 100 if available_gb > 0 else 0.0
-        feasible = estimated_per_gpu <= available_gb * 0.95
+        feasible = estimated_per_gpu <= available_gb * VRAM_HEADROOM
 
         suggestion = None
         if not feasible:

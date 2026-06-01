@@ -1,4 +1,5 @@
 import asyncio
+import shlex
 import time
 import os
 import signal
@@ -114,7 +115,7 @@ class VLLMConfig:
         if self.lora is not None:
             cmd += ["--lora", self.lora]
         if self.extra_args.strip():
-            cmd += self.extra_args.strip().split()
+            cmd += shlex.split(self.extra_args)
 
         return cmd
 
@@ -201,6 +202,7 @@ class Instance:
                 "disable_log_stats": self.config.disable_log_stats,
                 "load_format": self.config.load_format,
                 "lora": self.config.lora,
+                "extra_args": self.config.extra_args,
                 "env_vars": self.config.env_vars,
             },
         }
@@ -510,7 +512,7 @@ class InstanceManager:
                 if scrap.prefill_throughput == 0:
                     scrap.prefill_throughput = prefill_tps
                 else:
-                    scrap.prefill_throughput = 0.4 * prefill_tps + 0.6 * scrap.prefill_throughput
+                    scrap.prefill_throughput = self.METRICS_ALPHA * prefill_tps + (1 - self.METRICS_ALPHA) * scrap.prefill_throughput
                 instance.metrics.prefill_throughput = scrap.prefill_throughput
                 instance.metrics.timestamp = time.time()
             for cb in instance._log_callbacks:

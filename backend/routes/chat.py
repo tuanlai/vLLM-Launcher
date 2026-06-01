@@ -13,22 +13,28 @@ from schemas import ChatRequest
 logger = logging.getLogger(__name__)
 
 
+def _get_running_instance(instance_id: str, manager: InstanceManager):
+    """Look up an instance and verify it is running. Raises HTTPException on failure."""
+    try:
+        instance = manager.get(instance_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
+
+    if instance.state != ProcessState.RUNNING:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Instance {instance_id} is not running (state: {instance.state.value})",
+        )
+
+    return instance
+
+
 def create_chat_router(manager: InstanceManager) -> APIRouter:
     router = APIRouter(tags=["chat"])
 
     @router.post("/api/chat/{instance_id}")
     async def chat_proxy(instance_id: str, request: ChatRequest):
-        try:
-            instance = manager.get(instance_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
-
-        if instance.state != ProcessState.RUNNING:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Instance {instance_id} is not running (state: {instance.state.value})",
-            )
-
+        instance = _get_running_instance(instance_id, manager)
         port = instance.config.port
         url = f"http://localhost:{port}/v1/chat/completions"
 
@@ -46,17 +52,7 @@ def create_chat_router(manager: InstanceManager) -> APIRouter:
 
     @router.post("/api/chat/{instance_id}/stream")
     async def chat_proxy_stream(instance_id: str, request: ChatRequest):
-        try:
-            instance = manager.get(instance_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
-
-        if instance.state != ProcessState.RUNNING:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Instance {instance_id} is not running (state: {instance.state.value})",
-            )
-
+        instance = _get_running_instance(instance_id, manager)
         port = instance.config.port
         url = f"http://localhost:{port}/v1/chat/completions"
 

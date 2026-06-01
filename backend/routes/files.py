@@ -17,7 +17,6 @@ def create_files_router() -> APIRouter:
     @router.get("/api/files/browse")
     async def browse_files(
         path: str = Query("/"),
-        mode: str = Query("dir"),
     ):
         target = Path(path).resolve()
 

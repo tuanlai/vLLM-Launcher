@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import ReactECharts from 'echarts-for-react'
 import AnimatedGauge from '../components/AnimatedGauge'
@@ -37,7 +37,7 @@ export default function Dashboard({ ws }: DashboardProps) {
   }, [selectedInstanceId, ws.instances, ws.selectInstance])
 
   // Build throughput chart option
-  const chartOption = {
+  const chartOption = useMemo(() => ({
     backgroundColor: 'transparent',
     grid: {
       top: 30,
@@ -89,6 +89,7 @@ export default function Dashboard({ ws }: DashboardProps) {
         smooth: true,
         symbol: 'none',
         lineStyle: { color: '#10b981', width: 2 },
+        itemStyle: { color: '#10b981' },
         areaStyle: {
           color: {
             type: 'linear',
@@ -108,6 +109,7 @@ export default function Dashboard({ ws }: DashboardProps) {
         smooth: true,
         symbol: 'none',
         lineStyle: { color: '#3b82f6', width: 2 },
+        itemStyle: { color: '#3b82f6' },
         areaStyle: {
           color: {
             type: 'linear',
@@ -123,7 +125,7 @@ export default function Dashboard({ ws }: DashboardProps) {
     ],
     animation: true,
     animationDuration: 300,
-  }
+  }), [metricsHistory, t])
 
   const pageVariants = {
     initial: { opacity: 0, y: 8 },
@@ -337,17 +339,6 @@ export default function Dashboard({ ws }: DashboardProps) {
           align-items: flex-start;
           justify-content: space-between;
           margin-bottom: 32px;
-        }
-        .page-title {
-          font-size: 24px;
-          font-weight: 600;
-          color: var(--ink);
-          letter-spacing: -0.5px;
-        }
-        .page-subtitle {
-          font-size: 14px;
-          color: var(--mute);
-          margin-top: 4px;
         }
         .dashboard-actions {
           display: flex;

@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
                 await client.send_text('{"type":"error","data":{"message":"Server shutting down"}}')
                 await client.close()
             except Exception:
-                pass
+                logger.debug("Error closing WebSocket during shutdown", exc_info=True)
         clients.clear()
     for inst in manager.list_all():
         if inst.state.value in ("running", "starting"):
@@ -75,7 +75,7 @@ app = FastAPI(title="vLLM Launcher", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

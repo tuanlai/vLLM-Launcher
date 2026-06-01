@@ -1,8 +1,8 @@
 """Settings, presets, and version API routes."""
 
+import asyncio
 import logging
 import os
-import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -34,13 +34,13 @@ def create_settings_router(manager: InstanceManager, config_store: ConfigStore) 
     @router.get("/api/version")
     async def get_vllm_version():
         try:
-            result = subprocess.run(
-                [manager.python_path, "-c", "import vllm; print(vllm.__version__)"],
-                capture_output=True,
-                text=True,
-                timeout=10,
+            proc = await asyncio.create_subprocess_exec(
+                manager.python_path, "-c", "import vllm; print(vllm.__version__)",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            version = result.stdout.strip() if result.returncode == 0 else None
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            version = stdout.decode().strip() if proc.returncode == 0 else None
         except Exception:
             version = None
         return {

@@ -69,7 +69,6 @@ const en = {
   // Playground
   'playground.title': 'Playground',
   'playground.subtitle': 'Test your models with chat completions',
-  'playground.instance': 'Instance',
   'playground.noRunning': 'No running instances',
   'playground.maxTokens': 'Max Tokens',
   'playground.temperature': 'Temperature',
@@ -78,15 +77,12 @@ const en = {
   'playground.systemPlaceholder': 'You are a helpful assistant...',
   'playground.emptyHint': 'Send a message to start chatting with your model.',
   'playground.thinking': 'Thinking...',
-  'playground.dismiss': 'Dismiss',
   'playground.latency': 'Latency',
   'playground.promptTokens': 'Prompt tokens',
   'playground.completionTokens': 'Completion tokens',
   'playground.model': 'Model',
   'playground.inputPlaceholder': 'Type a message... (Shift+Enter for new line)',
   'playground.clear': 'Clear',
-  'playground.send': 'Send',
-  'playground.sending': 'Sending...',
   'playground.parameters': 'Parameters',
 
   // Settings
@@ -110,7 +106,6 @@ const en = {
   'status.error': 'Error',
 
   // Config Form
-  'config.commandPreview': 'Command Preview',
   'config.common': 'Common Parameters',
   'config.port': 'Port',
   'config.host': 'Host',
@@ -178,9 +173,6 @@ const en = {
   'settings.notDetected': 'Not detected',
   'settings.currentPath': 'Current',
 
-  // Settings toast
-  'settings.serverRunning': 'Server is {state}. Stop it first to change settings.',
-
   // File Browser
   'fileBrowser.title': 'Browse Files',
   'fileBrowser.select': 'Select',
@@ -234,7 +226,6 @@ const en = {
   'config.customModelPath': 'Enter custom model path...',
   'config.checkingVRAM': 'Checking VRAM requirements...',
   'config.copyCommand': 'Copy command',
-  'config.default': 'Default',
   'config.loraPlaceholder': 'LoRA adapter path or name',
   'config.speculativePlaceholder': 'e.g. {"model": "path/to/draft", "num_speculative_tokens": 5}',
   'config.remove': 'Remove',

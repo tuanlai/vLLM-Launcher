@@ -39,7 +39,7 @@ export interface ErrorData {
 
 export interface WSMessage {
   type: 'log' | 'metrics' | 'status' | 'error'
-  data: any
+  data: LogEntry | Metrics | InstanceStatus | ErrorData
 }
 
 export const DEFAULT_METRICS: Metrics = {

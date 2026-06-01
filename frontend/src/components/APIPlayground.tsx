@@ -39,6 +39,8 @@ export default function APIPlayground({ instances }: APIPlaygroundProps) {
   const [enableThinking, setEnableThinking] = useState(saved.current?.enableThinking ?? true)
   const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set())
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>(saved.current?.chatHistory || [])
+  const chatHistoryRef = useRef(chatHistory)
+  useEffect(() => { chatHistoryRef.current = chatHistory }, [chatHistory])
   const [lastResponse, setLastResponse] = useState<ChatResponse | null>(saved.current?.lastResponse || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,7 +77,7 @@ export default function APIPlayground({ instances }: APIPlaygroundProps) {
 
     const messages: { role: string; content: string }[] = []
     if (systemMessage.trim()) messages.push({ role: 'system', content: systemMessage.trim() })
-    chatHistory.forEach((m) => { if (m.role !== 'system') messages.push({ role: m.role, content: m.content }) })
+    chatHistoryRef.current.forEach((m) => { if (m.role !== 'system') messages.push({ role: m.role, content: m.content }) })
     messages.push({ role: 'user', content: currentMessage })
 
     setChatHistory((prev) => [...prev, { role: 'user', content: currentMessage }])
@@ -95,7 +97,8 @@ export default function APIPlayground({ instances }: APIPlaygroundProps) {
         throw new Error(errData.detail || `HTTP ${res.status}`)
       }
 
-      const reader = res.body!.getReader()
+      if (!res.body) throw new Error('Empty response body')
+      const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let fullContent = ''
       let fullThinking = ''
@@ -145,7 +148,7 @@ export default function APIPlayground({ instances }: APIPlaygroundProps) {
     } finally {
       setLoading(false)
     }
-  }, [selectedId, userMessage, systemMessage, chatHistory, maxTokens, temperature, topP, enableThinking, loading])
+  }, [selectedId, userMessage, systemMessage, maxTokens, temperature, topP, enableThinking, loading])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }

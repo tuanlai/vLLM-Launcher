@@ -1,5 +1,6 @@
 """GPU info and port cleanup API routes."""
 
+import asyncio
 import logging
 import os
 import signal
@@ -20,7 +21,7 @@ def create_gpu_router(manager: InstanceManager, vram_checker: VRAMChecker) -> AP
 
     @router.get("/api/gpu")
     async def get_gpu_info():
-        gpus = vram_checker.get_gpus()
+        gpus = await vram_checker.get_gpus()
         return [
             {
                 "index": g.index,
@@ -105,7 +106,7 @@ def create_gpu_router(manager: InstanceManager, vram_checker: VRAMChecker) -> AP
                     while time.monotonic() < deadline:
                         if not psutil.pid_exists(orphan["pid"]):
                             break
-                        time.sleep(0.2)
+                        await asyncio.sleep(0.2)
                     else:
                         # Process still alive, escalate to SIGKILL
                         try:

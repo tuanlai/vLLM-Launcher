@@ -1,17 +1,11 @@
-import asyncio
+import logging
 import re
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 import httpx
 
-
-@dataclass
-class ScrapeResult:
-    """Result of a single /metrics scrape."""
-    prompt_tokens: int = 0
-    generation_tokens: int = 0
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -47,31 +41,6 @@ _KV_CACHE_RE = re.compile(
 )
 
 
-def parse_prometheus_text(text: str) -> ScrapeResult:
-    """Parse the plaintext Prometheus metrics from vLLM /metrics endpoint."""
-    result = ScrapeResult()
-    for line in text.splitlines():
-        m = _TOKEN_RE.match(line)
-        if m:
-            key, val = m.group(1), int(float(m.group(2)))
-            if key == "prompt_tokens":
-                result.prompt_tokens = val
-            elif key == "generation_tokens":
-                result.generation_tokens = val
-    return result
-
-
-async def scrape_metrics(port: int, timeout: float = 5.0) -> Optional[ScrapeResult]:
-    """Fetch and parse metrics from a running vLLM instance."""
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(f"http://localhost:{port}/metrics")
-            if resp.status_code == 200:
-                return parse_prometheus_text(resp.text)
-    except Exception:
-        pass
-    return None
-
 
 async def scrape_full_metrics(port: int, timeout: float = 5.0) -> Optional[dict]:
     """Fetch all metrics we care about from a running vLLM instance."""
@@ -81,6 +50,7 @@ async def scrape_full_metrics(port: int, timeout: float = 5.0) -> Optional[dict]
             if resp.status_code != 200:
                 return None
     except Exception:
+        logger.debug("Failed to scrape metrics on port %d", port, exc_info=True)
         return None
 
     data = {

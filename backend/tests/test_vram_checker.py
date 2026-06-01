@@ -16,14 +16,16 @@ def test_estimate_vram_quantized_less_than_float16():
     assert awq < fp16
 
 
-def test_check_feasibility():
+@pytest.mark.asyncio
+async def test_check_feasibility():
     checker = VRAMChecker()
-    result = checker.check_feasibility(param_billions=7, dtype="float16", available_gb=98.0)
+    result = await checker.check_feasibility(param_billions=7, dtype="float16", available_gb=98.0)
     assert result.feasible is True
 
 
-def test_check_infeasible():
+@pytest.mark.asyncio
+async def test_check_infeasible():
     checker = VRAMChecker()
-    result = checker.check_feasibility(param_billions=70, dtype="float16", available_gb=8.0)
+    result = await checker.check_feasibility(param_billions=70, dtype="float16", available_gb=8.0)
     assert result.feasible is False
     assert result.suggestion is not None

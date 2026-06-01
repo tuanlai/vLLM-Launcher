@@ -421,6 +421,19 @@ textarea.input {
   display: none;
 }
 
+/* Page Header */
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.5px;
+}
+.page-subtitle {
+  font-size: 14px;
+  color: var(--mute);
+  margin-top: 4px;
+}
+
 /* Utility */
 .text-mono {
   font-family: var(--font-mono);

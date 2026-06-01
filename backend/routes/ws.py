@@ -56,6 +56,7 @@ def create_ws_router(manager: InstanceManager, ws_manager: WebSocketManager) -> 
         except WebSocketDisconnect:
             clients.discard(websocket)
         except Exception:
+            logger.warning("WebSocket error for instance %s", instance_id, exc_info=True)
             clients.discard(websocket)
 
     return router
