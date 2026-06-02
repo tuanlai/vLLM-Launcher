@@ -8,6 +8,15 @@ import { useI18n } from '../i18n'
 import type { UseWebSocketReturn } from '../api/websocket'
 import { DEFAULT_METRICS } from '../api/websocket'
 
+// Auto-scale gauge max to a "nice" number so the gauge never hard-caps.
+function getNiceMax(value: number): number {
+  const tiers = [100, 200, 500, 1000, 2000, 5000, 10_000, 20_000, 50_000, 100_000]
+  for (const t of tiers) {
+    if (value <= t) return t
+  }
+  return 100_000
+}
+
 interface DashboardProps {
   ws: UseWebSocketReturn
 }
@@ -19,6 +28,9 @@ export default function Dashboard({ ws }: DashboardProps) {
   const status = selectedInstanceId ? getStatus(selectedInstanceId) : null
   const metrics = selectedInstanceId ? getMetrics(selectedInstanceId) : DEFAULT_METRICS
   const metricsHistory = selectedInstanceId ? getMetricsHistory(selectedInstanceId) : []
+
+  const prefillMax = useMemo(() => getNiceMax(metrics.prefill_throughput || 1), [metrics.prefill_throughput])
+  const decodeMax = useMemo(() => getNiceMax(metrics.decode_throughput || 1), [metrics.decode_throughput])
 
   const state = status?.state ?? 'idle'
   const isRunning = state === 'running'
@@ -228,7 +240,7 @@ export default function Dashboard({ ws }: DashboardProps) {
               </div>
               <AnimatedGauge
                 value={metrics.prefill_throughput}
-                max={5000}
+                max={prefillMax}
                 label={t('config.tokensPerSec')}
                 unit="tok/s"
                 color="#10b981"
@@ -242,7 +254,7 @@ export default function Dashboard({ ws }: DashboardProps) {
               </div>
               <AnimatedGauge
                 value={metrics.decode_throughput}
-                max={500}
+                max={decodeMax}
                 label={t('config.tokensPerSec')}
                 unit="tok/s"
                 color="#3b82f6"

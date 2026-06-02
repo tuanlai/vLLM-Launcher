@@ -23,10 +23,10 @@ export default function AnimatedGauge({
   })
 
   useEffect(() => {
-    springValue.set(Math.min(value, max))
+    springValue.set(value)
   }, [value, max, springValue])
 
-  const percentage = useTransform(springValue, (v) => (v / max) * 100)
+  const percentage = useTransform(springValue, (v) => Math.min((v / max) * 100, 100))
   const displayValue = useTransform(springValue, (v) => v.toFixed(1))
 
   // SVG arc calculation
