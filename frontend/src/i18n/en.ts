@@ -23,12 +23,16 @@ const en = {
   'dashboard.waiting': 'Waiting',
   'dashboard.prefillSpeed': 'Prefill Speed',
   'dashboard.prefillDesc': 'Prompt processing',
+  'dashboard.prefillWindow': 'avg over 10s',
   'dashboard.decodeSpeed': 'Decode Speed',
   'dashboard.decodeDesc': 'Token generation',
   'dashboard.throughput': 'Throughput Over Time',
   'dashboard.throughputDesc': 'Real-time performance metrics',
   'dashboard.waitingMetrics': 'Waiting for metrics data...',
   'dashboard.gpuCache': 'GPU Cache Usage',
+  'dashboard.tokenUsage': 'Token Usage',
+  'dashboard.inputTokens': 'Input Tokens',
+  'dashboard.outputTokens': 'Output Tokens',
 
   // Instances
   'instances.title': 'Instances',
@@ -45,6 +49,7 @@ const en = {
   'instances.cleanModal.confirm': 'Kill Processes',
   'instances.cleanModal.cancel': 'Cancel',
   'instances.cleanModal.done': 'Killed {count} process(es). Ports released.',
+  'instances.toast.createFailed': 'Failed to create instance: {reason}',
   'instances.cleanModal.columnPid': 'PID',
   'instances.cleanModal.columnPort': 'Port',
   'instances.cleanModal.columnModel': 'Model',
@@ -59,6 +64,9 @@ const en = {
   'instance.noModel': 'No model',
   'instance.prefill': 'Prefill',
   'instance.decode': 'Decode',
+  'instance.toast.startFailed': 'Failed to start: {reason}',
+  'instance.toast.stopFailed': 'Failed to stop: {reason}',
+  'instance.toast.deleteFailed': 'Failed to delete: {reason}',
 
   // Logs
   'logs.title': 'Logs',
@@ -227,6 +235,8 @@ const en = {
   'config.checkingVRAM': 'Checking VRAM requirements...',
   'config.copyCommand': 'Copy command',
   'config.loraPlaceholder': 'LoRA adapter path or name',
+  'config.servedModelName': 'Served Model Name',
+  'config.sameAsModel': 'Same as model by default',
   'config.speculativePlaceholder': 'e.g. {"model": "path/to/draft", "num_speculative_tokens": 5}',
   'config.remove': 'Remove',
   'config.tokensPerSec': 'tokens/s',

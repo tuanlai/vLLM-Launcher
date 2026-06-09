@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import ReactECharts from 'echarts-for-react'
 import AnimatedGauge from '../components/AnimatedGauge'
@@ -9,6 +9,7 @@ import type { UseWebSocketReturn } from '../api/websocket'
 import { DEFAULT_METRICS } from '../api/websocket'
 
 // Auto-scale gauge max to a "nice" number so the gauge never hard-caps.
+// Uses a fixed ceiling per instance — recalculates only when instance changes.
 function getNiceMax(value: number): number {
   const tiers = [100, 200, 500, 1000, 2000, 5000, 10_000, 20_000, 50_000, 100_000]
   for (const t of tiers) {
@@ -21,24 +22,54 @@ interface DashboardProps {
   ws: UseWebSocketReturn
 }
 
+// Debounced gauge max — only update every 2s to prevent visual jumps
+const GAUGE_MAX_UPDATE_MS = 2000
+
 export default function Dashboard({ ws }: DashboardProps) {
   const { t } = useI18n()
   const { selectedInstanceId, getStatus, getMetrics, getMetricsHistory, lastError, stopInstance, clearError } = ws
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [prefillMax, setPrefillMax] = useState(1000)
+  const [decodeMax, setDecodeMax] = useState(1000)
+  const lastMaxUpdate = useRef({ prefill: 0, decode: 0 })
 
   const status = selectedInstanceId ? getStatus(selectedInstanceId) : null
   const metrics = selectedInstanceId ? getMetrics(selectedInstanceId) : DEFAULT_METRICS
   const metricsHistory = selectedInstanceId ? getMetricsHistory(selectedInstanceId) : []
 
-  const prefillMax = useMemo(() => getNiceMax(metrics.prefill_throughput || 1), [metrics.prefill_throughput])
-  const decodeMax = useMemo(() => getNiceMax(metrics.decode_throughput || 1), [metrics.decode_throughput])
-
   const state = status?.state ?? 'idle'
   const isRunning = state === 'running'
   const isStarting = state === 'starting'
 
-  const handleStop = () => {
-    if (selectedInstanceId) stopInstance(selectedInstanceId)
+  const handleStop = async () => {
+    if (!selectedInstanceId) return
+    try {
+      await stopInstance(selectedInstanceId)
+    } catch (err) {
+      setToast({ type: 'error', message: t('instance.toast.stopFailed').replace('{reason}', (err as Error).message || 'unknown') })
+    }
   }
+
+  // Auto-hide toast after 5 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
+
+  // Debounced gauge max updates to prevent visual jumps
+  useEffect(() => {
+    const now = Date.now()
+    if (now - lastMaxUpdate.current.prefill >= GAUGE_MAX_UPDATE_MS) {
+      lastMaxUpdate.current.prefill = now
+      setPrefillMax(getNiceMax(metrics.prefill_throughput || 1))
+    }
+    if (now - lastMaxUpdate.current.decode >= GAUGE_MAX_UPDATE_MS) {
+      lastMaxUpdate.current.decode = now
+      setDecodeMax(getNiceMax(metrics.decode_throughput || 1))
+    }
+  }, [metrics.prefill_throughput, metrics.decode_throughput])
 
   // Auto-select first running instance if none selected
   useEffect(() => {
@@ -48,7 +79,16 @@ export default function Dashboard({ ws }: DashboardProps) {
     }
   }, [selectedInstanceId, ws.instances, ws.selectInstance])
 
-  // Build throughput chart option
+  // Reset gauge maxes when instance changes
+  useEffect(() => {
+    if (selectedInstanceId) {
+      setPrefillMax(getNiceMax(metrics.prefill_throughput || 1))
+      setDecodeMax(getNiceMax(metrics.decode_throughput || 1))
+      lastMaxUpdate.current = { prefill: 0, decode: 0 }
+    }
+  }, [selectedInstanceId])
+
+  // Build throughput chart option — prefill (window avg) + decode (real-time EMA)
   const chartOption = useMemo(() => ({
     backgroundColor: 'transparent',
     grid: {
@@ -67,7 +107,7 @@ export default function Dashboard({ ws }: DashboardProps) {
     legend: {
       data: [t('instance.prefill'), t('instance.decode')],
       top: 0,
-      right: 0,
+      left: 'center',
       textStyle: { color: '#a3a3a3', fontSize: 11 },
       itemWidth: 12,
       itemHeight: 2,
@@ -80,17 +120,31 @@ export default function Dashboard({ ws }: DashboardProps) {
     yAxis: [
       {
         type: 'value',
-        name: `${t('instance.prefill')} / ${t('instance.decode')} tok/s`,
-        nameTextStyle: { color: '#a3a3a3', fontSize: 10 },
+        min: 0,
+        name: `${t('instance.prefill')} tok/s`,
+        nameTextStyle: { color: '#10b981', fontSize: 10 },
         axisLine: { show: false },
         splitLine: { lineStyle: { color: '#f5f5f5' } },
-        axisLabel: { color: '#a3a3a3', fontSize: 10, fontFamily: 'JetBrains Mono' },
+        axisLabel: {
+          color: '#10b981',
+          fontSize: 10,
+          fontFamily: 'JetBrains Mono',
+          formatter: (val: number) => val >= 1 ? val.toFixed(0) : val.toFixed(1),
+        },
       },
       {
         type: 'value',
+        min: 0,
+        name: `${t('instance.decode')} tok/s`,
+        nameTextStyle: { color: '#3b82f6', fontSize: 10 },
         axisLine: { show: false },
         splitLine: { show: false },
-        axisLabel: { color: '#a3a3a3', fontSize: 10, fontFamily: 'JetBrains Mono' },
+        axisLabel: {
+          color: '#3b82f6',
+          fontSize: 10,
+          fontFamily: 'JetBrains Mono',
+          formatter: (val: number) => val >= 1 ? val.toFixed(0) : val.toFixed(1),
+        },
       },
     ],
     series: [
@@ -107,7 +161,7 @@ export default function Dashboard({ ws }: DashboardProps) {
             type: 'linear',
             x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(16, 185, 129, 0.2)' },
+              { offset: 0, color: 'rgba(16, 185, 129, 0.15)' },
               { offset: 1, color: 'rgba(16, 185, 129, 0)' },
             ],
           },
@@ -127,7 +181,7 @@ export default function Dashboard({ ws }: DashboardProps) {
             type: 'linear',
             x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
+              { offset: 0, color: 'rgba(59, 130, 246, 0.15)' },
               { offset: 1, color: 'rgba(59, 130, 246, 0)' },
             ],
           },
@@ -135,8 +189,7 @@ export default function Dashboard({ ws }: DashboardProps) {
         data: metricsHistory.map((m: { decode_throughput: number }) => m.decode_throughput),
       },
     ],
-    animation: true,
-    animationDuration: 300,
+    animation: false,
   }), [metricsHistory, t])
 
   const pageVariants = {
@@ -218,9 +271,9 @@ export default function Dashboard({ ws }: DashboardProps) {
             <button className="error-banner-close" onClick={clearError}>×</button>
           </div>
           <p className="error-banner-desc">{lastError.description}</p>
-          {lastError.suggestions.length > 0 && (
+          {(lastError.suggestions ?? []).length > 0 && (
             <ul className="error-banner-suggestions">
-              {lastError.suggestions.map((s: string, i: number) => (
+              {(lastError.suggestions ?? []).map((s: string, i: number) => (
                 <li key={i}>{s}</li>
               ))}
             </ul>
@@ -228,11 +281,24 @@ export default function Dashboard({ ws }: DashboardProps) {
         </motion.div>
       )}
 
+      {/* Toast */}
+      {toast && (
+        <motion.div
+          className={`dashboard-toast dashboard-toast--${toast.type}`}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 16 }}
+          onClick={() => setToast(null)}
+        >
+          {toast.message}
+        </motion.div>
+      )}
+
       {/* Metrics Grid */}
       {selectedInstanceId && (
         <>
           <div className="metrics-grid">
-            {/* Gauges */}
+            {/* Prefill — gauge (window-averaged EMA) */}
             <div className="card gauge-card">
               <div className="card-header">
                 <span className="card-title">{t('dashboard.prefillSpeed')}</span>
@@ -247,6 +313,7 @@ export default function Dashboard({ ws }: DashboardProps) {
               />
             </div>
 
+            {/* Decode — gauge (real-time EMA) */}
             <div className="card gauge-card">
               <div className="card-header">
                 <span className="card-title">{t('dashboard.decodeSpeed')}</span>
@@ -314,6 +381,33 @@ export default function Dashboard({ ws }: DashboardProps) {
                 {t('dashboard.waitingMetrics')}
               </div>
             )}
+          </div>
+
+          {/* Token Usage */}
+          <div className="card token-usage-card">
+            <div className="card-header">
+              <span className="card-title">{t('dashboard.tokenUsage')}</span>
+            </div>
+            <div className="token-usage-grid">
+              <div className="token-usage-item">
+                <div className="token-usage-icon" style={{ color: '#10b981' }}>↓</div>
+                <div className="token-usage-content">
+                  <div className="token-usage-label">{t('dashboard.inputTokens')}</div>
+                  <div className="token-usage-value text-mono">
+                    {metrics.prompt_tokens > 0 ? metrics.prompt_tokens.toLocaleString() : '—'}
+                  </div>
+                </div>
+              </div>
+              <div className="token-usage-item">
+                <div className="token-usage-icon" style={{ color: '#3b82f6' }}>↑</div>
+                <div className="token-usage-content">
+                  <div className="token-usage-label">{t('dashboard.outputTokens')}</div>
+                  <div className="token-usage-value text-mono">
+                    {metrics.generation_tokens > 0 ? metrics.generation_tokens.toLocaleString() : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* GPU Cache */}
@@ -507,6 +601,71 @@ export default function Dashboard({ ws }: DashboardProps) {
           height: 100%;
           border-radius: 4px;
           transition: background 0.3s;
+        }
+        .token-usage-card {
+          margin-bottom: 20px;
+        }
+        .token-usage-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+        }
+        .token-usage-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .token-usage-icon {
+          font-size: 20px;
+          font-weight: 700;
+          width: 36px;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          background: var(--canvas);
+          flex-shrink: 0;
+        }
+        .token-usage-content {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .token-usage-label {
+          font-size: 11px;
+          color: var(--mute);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .token-usage-value {
+          font-size: 20px;
+          font-weight: 600;
+          color: var(--ink);
+        }
+        .dashboard-toast {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          padding: 12px 20px;
+          border-radius: var(--radius-md);
+          font-size: 13px;
+          font-weight: 500;
+          z-index: 1100;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          cursor: pointer;
+          max-width: 400px;
+          word-break: break-word;
+        }
+        .dashboard-toast--success {
+          background: var(--success-soft, #ecfdf5);
+          color: var(--success, #10b981);
+          border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .dashboard-toast--error {
+          background: var(--error-soft, #fef2f2);
+          color: var(--error, #ef4444);
+          border: 1px solid rgba(239, 68, 68, 0.3);
         }
         @media (max-width: 900px) {
           .metrics-grid {

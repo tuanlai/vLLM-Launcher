@@ -25,12 +25,16 @@ const zh: Record<TranslationKey, string> = {
   'dashboard.waiting': '等待中',
   'dashboard.prefillSpeed': 'Prefill 速度',
   'dashboard.prefillDesc': '提示词处理',
+  'dashboard.prefillWindow': '过去 10 秒平均',
   'dashboard.decodeSpeed': 'Decode 速度',
   'dashboard.decodeDesc': 'Token 生成',
   'dashboard.throughput': '吞吐量趋势',
   'dashboard.throughputDesc': '实时性能指标',
   'dashboard.waitingMetrics': '等待指标数据...',
   'dashboard.gpuCache': 'GPU 缓存使用',
+  'dashboard.tokenUsage': 'Token 用量',
+  'dashboard.inputTokens': 'Input Tokens',
+  'dashboard.outputTokens': 'Output Tokens',
 
   // 实例
   'instances.title': '实例',
@@ -47,6 +51,7 @@ const zh: Record<TranslationKey, string> = {
   'instances.cleanModal.confirm': '结束进程',
   'instances.cleanModal.cancel': '取消',
   'instances.cleanModal.done': '已结束 {count} 个进程, 端口已释放。',
+  'instances.toast.createFailed': '创建实例失败：{reason}',
   'instances.cleanModal.columnPid': 'PID',
   'instances.cleanModal.columnPort': '端口',
   'instances.cleanModal.columnModel': '模型',
@@ -61,6 +66,9 @@ const zh: Record<TranslationKey, string> = {
   'instance.noModel': '无模型',
   'instance.prefill': 'Prefill',
   'instance.decode': 'Decode',
+  'instance.toast.startFailed': '启动失败：{reason}',
+  'instance.toast.stopFailed': '停止失败：{reason}',
+  'instance.toast.deleteFailed': '删除失败：{reason}',
 
   // 日志
   'logs.title': '日志',
@@ -229,6 +237,8 @@ const zh: Record<TranslationKey, string> = {
   'config.checkingVRAM': '检查显存需求中...',
   'config.copyCommand': '复制命令',
   'config.loraPlaceholder': 'LoRA 适配器路径或名称',
+  'config.servedModelName': '服务模型名称',
+  'config.sameAsModel': '默认为模型名称',
   'config.speculativePlaceholder': '例如 {"model": "path/to/draft", "num_speculative_tokens": 5}',
   'config.remove': '移除',
   'config.tokensPerSec': 'tokens/s',

@@ -15,6 +15,7 @@ interface ConfigFormProps {
 
 interface ConfigState {
   model: string
+  served_model_name: string
   port: number
   host: string
   tensor_parallel_size: number
@@ -45,6 +46,7 @@ interface ConfigState {
 
 const DEFAULTS: ConfigState = {
   model: '',
+  served_model_name: '',
   port: 8000,
   host: '0.0.0.0',
   tensor_parallel_size: 1,
@@ -81,6 +83,9 @@ function buildCommand(config: ConfigState): string {
   }
 
   parts.push(config.model)
+
+  if (config.served_model_name)
+    parts.push('--served-model-name', config.served_model_name)
 
   if (config.port !== DEFAULTS.port) parts.push('--port', String(config.port))
   if (config.host !== DEFAULTS.host) parts.push('--host', config.host)
@@ -211,6 +216,7 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
     if (!initialConfig) return { ...DEFAULTS }
     return {
       model: initialConfig.model ?? DEFAULTS.model,
+      served_model_name: initialConfig.served_model_name ?? DEFAULTS.served_model_name,
       port: initialConfig.port ?? DEFAULTS.port,
       host: initialConfig.host ?? DEFAULTS.host,
       tensor_parallel_size: initialConfig.tensor_parallel_size ?? DEFAULTS.tensor_parallel_size,
@@ -264,6 +270,7 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
     e.preventDefault()
     const submitConfig: Record<string, any> = {
       model: config.model,
+      served_model_name: config.served_model_name || null,
       port: config.port,
       host: config.host,
       tensor_parallel_size: config.tensor_parallel_size,
@@ -377,6 +384,17 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
               onChange={(e) => update('host', e.target.value)}
             />
           </div>
+        </div>
+
+        <div className="form-group">
+          <label className="input-label">{t('config.servedModelName')}</label>
+          <input
+            type="text"
+            className="input"
+            placeholder={t('config.sameAsModel')}
+            value={config.served_model_name}
+            onChange={(e) => update('served_model_name', e.target.value)}
+          />
         </div>
 
         <div className="form-row">

@@ -38,6 +38,9 @@ export function useWebSocket(): UseWebSocketReturn {
   const metricsMap = useRef<Map<string, Metrics>>(new Map())
   const metricsHistoryMap = useRef<Map<string, Metrics[]>>(new Map())
 
+  // Dismissed errors: track { error_type -> dismiss_time } to prevent re-popup
+  const dismissedErrors = useRef<Map<string, number>>(new Map())
+
   // WebSocket connections per instance
   const wsMap = useRef<Map<string, WebSocket>>(new Map())
   const reconnectTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
@@ -45,6 +48,8 @@ export function useWebSocket(): UseWebSocketReturn {
 
   // Force re-render trigger for map updates
   const [, forceUpdate] = useState(0)
+
+  const ERROR_COOLDOWN_MS = 30000  // 30s cooldown before same error can re-pop
 
   const connectInstance = useCallback((instanceId: string) => {
     // Don't connect if already connected
@@ -79,17 +84,18 @@ export function useWebSocket(): UseWebSocketReturn {
               const idx = prev.findIndex((i) => i.id === instanceId)
               if (idx >= 0) {
                 const next = [...prev]
-                next[idx] = { ...next[idx], ...msg.data }
+                const data = msg.data as InstanceStatus
+                next[idx] = { ...next[idx], ...data, metrics: data.metrics ?? next[idx].metrics ?? DEFAULT_METRICS }
                 return next
               }
-              // If not found, it might be a new instance - add it
-              return [...prev, msg.data]
+              const data = msg.data as InstanceStatus
+              return [...prev, { ...data, metrics: data.metrics ?? DEFAULT_METRICS }]
             })
             break
 
           case 'log': {
             const currentLogs = logsMap.current.get(instanceId) || []
-            const next = [...currentLogs, msg.data]
+            const next = [...currentLogs, msg.data as LogEntry]
             logsMap.current.set(
               instanceId,
               next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next
@@ -99,9 +105,10 @@ export function useWebSocket(): UseWebSocketReturn {
           }
 
           case 'metrics': {
-            metricsMap.current.set(instanceId, msg.data)
+            const metrics = msg.data as Metrics
+            metricsMap.current.set(instanceId, metrics)
             const currentHistory = metricsHistoryMap.current.get(instanceId) || []
-            const nextHistory = [...currentHistory, msg.data]
+            const nextHistory = [...currentHistory, metrics]
             metricsHistoryMap.current.set(
               instanceId,
               nextHistory.length > MAX_METRICS_HISTORY
@@ -112,9 +119,16 @@ export function useWebSocket(): UseWebSocketReturn {
             break
           }
 
-          case 'error':
-            setLastError(msg.data)
+          case 'error': {
+            const err = msg.data as ErrorData
+            // Ignore errors with blank messages or empty titles
+            if (!err?.message?.trim() || !err?.title?.trim()) break
+            // Ignore if same error type was dismissed within cooldown
+            const dismissedAt = dismissedErrors.current.get(err.error_type)
+            if (dismissedAt && Date.now() - dismissedAt < ERROR_COOLDOWN_MS) break
+            setLastError(err)
             break
+          }
         }
       } catch {
         // ignore parse errors
@@ -160,7 +174,7 @@ export function useWebSocket(): UseWebSocketReturn {
             const existing = prevMap.get(d.id)
             if (existing) {
               // Preserve WS-enriched metrics
-              return { ...d, metrics: existing.metrics }
+              return { ...d, metrics: existing.metrics ?? DEFAULT_METRICS }
             }
             return d
           })
@@ -268,7 +282,12 @@ export function useWebSocket(): UseWebSocketReturn {
   }, [])
 
   const clearError = useCallback(() => {
-    setLastError(null)
+    setLastError((prev) => {
+      if (prev?.error_type) {
+        dismissedErrors.current.set(prev.error_type, Date.now())
+      }
+      return null
+    })
   }, [])
 
   const cleanOrphanPorts = useCallback(async (): Promise<{ found: number; killed: number; orphans: Array<{ pid: number; port: number | null; model: string }> }> => {

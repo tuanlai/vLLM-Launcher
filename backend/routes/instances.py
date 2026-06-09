@@ -42,6 +42,7 @@ def create_instances_router(manager: InstanceManager, ws_manager: WebSocketManag
             disable_log_stats=req.disable_log_stats,
             load_format=req.load_format,
             lora=req.lora,
+            served_model_name=req.served_model_name,
             extra_args=req.extra_args,
             env_vars=req.env_vars,
         )
@@ -83,6 +84,28 @@ def create_instances_router(manager: InstanceManager, ws_manager: WebSocketManag
             return {"success": True, "status": instance.get_status()}
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
+
+    @router.post("/api/instances/{instance_id}/start")
+    async def start_instance(instance_id: str):
+        try:
+            instance = manager.get(instance_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
+
+        # Replace callbacks — clear old ones to prevent duplicates on restart or double-click
+        instance._log_callbacks.clear()
+        instance._metrics_callbacks.clear()
+        instance._log_callbacks.append(ws_manager.make_log_handler(instance_id, manager))
+        instance._metrics_callbacks.append(ws_manager.make_metrics_handler(instance_id))
+        ws_manager.get_log_buffer(instance_id)
+        ws_manager.get_ws_clients(instance_id)
+
+        success = await manager.start(instance_id)
+        if not success:
+            raise HTTPException(status_code=400,
+                                detail=f"Failed to start instance {instance_id}: {instance.last_error or 'unknown error'}")
+        await ws_manager.broadcast_status(instance_id, instance.get_status())
+        return {"success": True, "status": instance.get_status()}
 
     @router.delete("/api/instances/{instance_id}")
     async def delete_instance(instance_id: str):

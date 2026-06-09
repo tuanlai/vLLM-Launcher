@@ -84,6 +84,9 @@ class WebSocketManager:
                 if "Server is ready" in event.message:
                     instance = manager.get(instance_id)
                     instance.state = ProcessState.RUNNING
+                    # Calculate actual startup time from start_time to now
+                    if instance.start_time:
+                        instance.load_time = (timestamp - instance.start_time.timestamp())
                     await self.broadcast_status(instance_id, instance.get_status())
                 elif "Model loaded" in event.message:
                     instance = manager.get(instance_id)
@@ -116,6 +119,8 @@ class WebSocketManager:
                     "prefill_throughput": instance.metrics.prefill_throughput,
                     "decode_throughput": instance.metrics.decode_throughput,
                     "total_tokens": instance.metrics.total_tokens,
+                    "prompt_tokens": instance.metrics.prompt_tokens,
+                    "generation_tokens": instance.metrics.generation_tokens,
                     "requests_active": instance.metrics.requests_active,
                     "requests_waiting": instance.metrics.requests_waiting,
                     "gpu_cache_usage": instance.metrics.gpu_cache_usage,

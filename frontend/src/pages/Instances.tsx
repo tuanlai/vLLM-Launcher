@@ -1,10 +1,15 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import InstanceCard from '../components/InstanceCard'
 import ConfigForm from '../components/ConfigForm'
 import { useI18n } from '../i18n'
 import type { UseWebSocketReturn, InstanceStatus } from '../api/websocket'
+
+interface Toast {
+  type: 'success' | 'error'
+  message: string
+}
 
 interface InstancesProps {
   ws: UseWebSocketReturn
@@ -23,6 +28,23 @@ export default function Instances({ ws }: InstancesProps) {
     killed: number
     orphans: Array<{ pid: number; port: number | null; model: string }>
   } | null>(null)
+  const [toast, setToast] = useState<Toast | null>(null)
+
+  const showToast = useCallback((type: Toast['type'], message: string) => {
+    setToast({ type, message })
+  }, [])
+
+  const hideToast = useCallback(() => {
+    setToast(null)
+  }, [])
+
+  // Auto-hide toast after 5 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => hideToast(), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast, hideToast])
 
   const handleCreate = useCallback(async (config: Record<string, any>) => {
     setCreating(true)
@@ -31,11 +53,11 @@ export default function Instances({ ws }: InstancesProps) {
       setShowNewModal(false)
       setDuplicateConfig(null)
     } catch (err) {
-      console.error('Failed to create instance:', err)
+      showToast('error', (err as Error).message || t('instances.toast.createFailed'))
     } finally {
       setCreating(false)
     }
-  }, [ws.createInstance])
+  }, [ws.createInstance, t, showToast])
 
   const handleDuplicate = useCallback((instance: InstanceStatus) => {
     setDuplicateConfig(instance.config || {})
@@ -46,25 +68,25 @@ export default function Instances({ ws }: InstancesProps) {
     try {
       await ws.stopInstance(id)
     } catch (err) {
-      console.error('Failed to stop instance:', err)
+      showToast('error', t('instance.toast.stopFailed').replace('{reason}', (err as Error).message || 'unknown'))
     }
-  }, [ws.stopInstance])
+  }, [ws.stopInstance, t, showToast])
 
   const handleStart = useCallback(async (id: string) => {
     try {
       await ws.startInstance(id)
     } catch (err) {
-      console.error('Failed to start instance:', err)
+      showToast('error', t('instance.toast.startFailed').replace('{reason}', (err as Error).message || 'unknown'))
     }
-  }, [ws.startInstance])
+  }, [ws.startInstance, t, showToast])
 
   const handleDelete = useCallback(async (id: string) => {
     try {
       await ws.deleteInstance(id)
     } catch (err) {
-      console.error('Failed to delete instance:', err)
+      showToast('error', t('instance.toast.deleteFailed').replace('{reason}', (err as Error).message || 'unknown'))
     }
-  }, [ws.deleteInstance])
+  }, [ws.deleteInstance, t, showToast])
 
   const handleViewLogs = useCallback((id: string) => {
     ws.selectInstance(id)
@@ -197,7 +219,7 @@ export default function Instances({ ws }: InstancesProps) {
                 <div style={{ color: 'var(--mute)', fontSize: 14 }}>
                   {t('instances.cleanModal.none')}
                 </div>
-              ) : cleanResult.orphans.length === 0 ? (
+              ) : cleanResult?.orphans?.length === 0 ? (
                 <div className="clean-modal__none">
                   <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
                   <span style={{ color: 'var(--mute)', fontSize: 14 }}>
@@ -207,7 +229,7 @@ export default function Instances({ ws }: InstancesProps) {
               ) : (
                 <div>
                   <p style={{ fontSize: 14, color: 'var(--body)', marginBottom: 16 }}>
-                    {t('instances.cleanModal.found').replace('{count}', String(cleanResult.orphans.length))}
+                    {t('instances.cleanModal.found').replace('{count}', String(cleanResult?.orphans?.length ?? 0))}
                   </p>
                   <div className="clean-modal__table">
                     <div className="clean-modal__table-header">
@@ -233,6 +255,19 @@ export default function Instances({ ws }: InstancesProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <motion.div
+          className={`instances-toast instances-toast--${toast.type}`}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 16 }}
+          onClick={hideToast}
+        >
+          {toast.message}
+        </motion.div>
       )}
 
       <style>{`
@@ -394,6 +429,30 @@ export default function Instances({ ws }: InstancesProps) {
           font-weight: 500;
           text-align: center;
           margin-top: var(--space-md);
+        }
+        .instances-toast {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          padding: 12px 20px;
+          border-radius: var(--radius-md);
+          font-size: 13px;
+          font-weight: 500;
+          z-index: 1100;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          cursor: pointer;
+          max-width: 400px;
+          word-break: break-word;
+        }
+        .instances-toast--success {
+          background: var(--success-soft, #ecfdf5);
+          color: var(--success, #10b981);
+          border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .instances-toast--error {
+          background: var(--error-soft, #fef2f2);
+          color: var(--error, #ef4444);
+          border: 1px solid rgba(239, 68, 68, 0.3);
         }
       `}</style>
     </motion.div>

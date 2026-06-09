@@ -32,6 +32,7 @@ class CreateInstanceRequest(BaseModel):
     disable_log_stats: bool = False
     load_format: str = "auto"
     lora: Optional[str] = None
+    served_model_name: Optional[str] = None
     extra_args: str = ""
     env_vars: Optional[dict[str, str]] = None
 

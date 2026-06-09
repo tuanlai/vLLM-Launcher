@@ -14,7 +14,6 @@ from typing import Optional
 import psutil
 
 from metrics_scraper import MetricsScrapState, scrape_full_metrics
-from log_parser import extract_prefill_throughput
 
 
 class ProcessState(str, Enum):
@@ -53,6 +52,7 @@ class VLLMConfig:
     disable_log_stats: bool = False
     load_format: str = "auto"
     lora: Optional[str] = None
+    served_model_name: Optional[str] = None
     extra_args: str = ""
     env_vars: Optional[dict[str, str]] = None
 
@@ -114,6 +114,8 @@ class VLLMConfig:
             cmd += ["--load-format", self.load_format]
         if self.lora is not None:
             cmd += ["--lora", self.lora]
+        if self.served_model_name is not None:
+            cmd += ["--served-model-name", self.served_model_name]
         if self.extra_args.strip():
             cmd += shlex.split(self.extra_args)
 
@@ -126,6 +128,8 @@ class MetricsSnapshot:
     prefill_throughput: float = 0.0
     decode_throughput: float = 0.0
     total_tokens: int = 0
+    prompt_tokens: int = 0
+    generation_tokens: int = 0
     requests_active: int = 0
     requests_waiting: int = 0
     gpu_cache_usage: float = 0.0
@@ -155,6 +159,12 @@ class Instance:
     _metrics_task: Optional[asyncio.Task] = field(
         default=None, repr=False
     )
+    _read_output_task: Optional[asyncio.Task] = field(
+        default=None, repr=False
+    )
+    _monitor_task: Optional[asyncio.Task] = field(
+        default=None, repr=False
+    )
     _metrics_callbacks: list = field(default_factory=list, repr=False)
 
     def get_status(self) -> dict:
@@ -171,6 +181,8 @@ class Instance:
                 "prefill_throughput": self.metrics.prefill_throughput,
                 "decode_throughput": self.metrics.decode_throughput,
                 "total_tokens": self.metrics.total_tokens,
+                "prompt_tokens": self.metrics.prompt_tokens,
+                "generation_tokens": self.metrics.generation_tokens,
                 "requests_active": self.metrics.requests_active,
                 "requests_waiting": self.metrics.requests_waiting,
                 "gpu_cache_usage": self.metrics.gpu_cache_usage,
@@ -202,6 +214,7 @@ class Instance:
                 "disable_log_stats": self.config.disable_log_stats,
                 "load_format": self.config.load_format,
                 "lora": self.config.lora,
+                "served_model_name": self.config.served_model_name,
                 "extra_args": self.config.extra_args,
                 "env_vars": self.config.env_vars,
             },
@@ -381,7 +394,7 @@ class InstanceManager:
                 elif key == "lora":
                     config.lora = val
                 elif key == "served_model_name":
-                    pass  # skip, we use model path
+                    config.served_model_name = val
                 i += 2
             else:
                 i += 1
@@ -429,6 +442,13 @@ class InstanceManager:
             **os.environ,
             "PATH": f"{venv_bin}:{os.environ.get('PATH', '')}",
             "PYTHONUNBUFFERED": "1",
+            # Fully disable NCCL multi-GPU communication — single GPU setups
+            # don't need it and get spurious errors with hybrid GPUs
+            "NCCL_P2P_DISABLE": "1",
+            "NCCL_SHM_DISABLE": "1",
+            "NCCL_IB_DISABLE": "1",
+            "NCCL_SOCKET_IFNAME": "none",
+            "NCCL_DEBUG": "error",
         }
         # Inject instance-specific environment variables
         if instance.config.env_vars:
@@ -444,8 +464,8 @@ class InstanceManager:
             )
             instance.pid = instance._process.pid
 
-            asyncio.create_task(self._read_output(instance_id))
-            asyncio.create_task(self._monitor_process(instance_id))
+            instance._read_output_task = asyncio.create_task(self._read_output(instance_id))
+            instance._monitor_task = asyncio.create_task(self._monitor_process(instance_id))
             instance._metrics_task = asyncio.create_task(
                 self._collect_metrics(instance_id)
             )
@@ -467,9 +487,13 @@ class InstanceManager:
 
         instance.state = ProcessState.STOPPING
 
-        if instance._metrics_task is not None:
-            instance._metrics_task.cancel()
-            instance._metrics_task = None
+        # Cancel all background tasks
+        for task in (instance._metrics_task, instance._read_output_task, instance._monitor_task):
+            if task is not None:
+                task.cancel()
+        instance._metrics_task = None
+        instance._read_output_task = None
+        instance._monitor_task = None
         try:
             if instance._process is not None:
                 instance._process.send_signal(signal.SIGTERM)
@@ -497,6 +521,12 @@ class InstanceManager:
         instance.state = ProcessState.STOPPED
         instance.pid = None
         instance._process = None
+        # Clear callbacks to prevent duplicate broadcasts on restart
+        instance._log_callbacks.clear()
+        instance._metrics_callbacks.clear()
+        # Reset throughput metrics so gauge shows 0 when stopped
+        instance.metrics.prefill_throughput = 0
+        instance.metrics.decode_throughput = 0
 
     async def _read_output(self, instance_id: str) -> None:
         instance = self.get(instance_id)
@@ -505,16 +535,9 @@ class InstanceManager:
 
         async for line_bytes in instance._process.stdout:
             line = line_bytes.decode("utf-8", errors="replace").rstrip("\n")
-            # Extract prefill throughput from vLLM log output
-            prefill_tps = extract_prefill_throughput(line)
-            if prefill_tps is not None:
-                scrap = instance._metrics_scrap_state
-                if scrap.prefill_throughput == 0:
-                    scrap.prefill_throughput = prefill_tps
-                else:
-                    scrap.prefill_throughput = self.METRICS_ALPHA * prefill_tps + (1 - self.METRICS_ALPHA) * scrap.prefill_throughput
-                instance.metrics.prefill_throughput = scrap.prefill_throughput
-                instance.metrics.timestamp = time.time()
+            # Skip vLLM APIServer access log for /metrics (our own scraping requests)
+            if '/metrics HTTP/1.1' in line:
+                continue
             for cb in instance._log_callbacks:
                 await cb(line, "stdout")
 
@@ -542,12 +565,16 @@ class InstanceManager:
             instance._metrics_task = None
 
     METRICS_INTERVAL = 0.5  # seconds between scrapes
-    METRICS_ALPHA = 0.4     # EMA smoothing factor
+    METRICS_PREFILL_WINDOW = 10.0  # window for prefill throughput (sustained average)
+    METRICS_DECODE_WINDOW = 2.0    # window for decode throughput (real-time)
+    METRICS_PREFILL_ALPHA = 0.23   # EMA: decays to ~1% over 10s → snaps to 0
+    METRICS_DECODE_ALPHA = 0.4     # EMA for decode — real-time
+    THRESHOLD_ZERO = 0.01          # snap near-zero values to 0
 
     async def _collect_metrics(self, instance_id: str) -> None:
         """Periodically scrape /metrics and update throughput via delta calculation."""
         try:
-            return await self._collect_metrics_loop(instance_id)
+            await self._collect_metrics_loop(instance_id)
         except asyncio.CancelledError:
             pass
 
@@ -555,6 +582,9 @@ class InstanceManager:
         instance = self.get(instance_id)
         port = instance.config.port
         scrap = instance._metrics_scrap_state
+
+        # Sliding window buffer: list of (timestamp, prompt_tokens, generation_tokens)
+        window: list[tuple[float, int, int]] = []
 
         while instance.state in (ProcessState.STARTING, ProcessState.RUNNING):
             data = await scrape_full_metrics(port)
@@ -567,32 +597,66 @@ class InstanceManager:
             instance.metrics.requests_active = data["running_reqs"]
             instance.metrics.requests_waiting = data["waiting_reqs"]
             instance.metrics.gpu_cache_usage = data["kv_cache_usage"]
+            instance.metrics.prompt_tokens = data["prompt_tokens"]
+            instance.metrics.generation_tokens = data["generation_tokens"]
             instance.metrics.total_tokens = (
                 data["prompt_tokens"] + data["generation_tokens"]
             )
 
-            # Delta-based throughput (decode only; prefill comes from log parsing)
-            if scrap.last_scrape_time > 0:
-                dt = now - scrap.last_scrape_time
-                if dt > 0.5:  # ignore tiny intervals
-                    dg = data["generation_tokens"] - scrap.last_generation_tokens
-                    raw_decode = dg / dt
-                    if scrap.decode_throughput == 0:
-                        scrap.decode_throughput = raw_decode
-                    else:
-                        a = self.METRICS_ALPHA
-                        scrap.decode_throughput = a * raw_decode + (1 - a) * scrap.decode_throughput
+            # Add to sliding window and trim old samples
+            window.append((now, data["prompt_tokens"], data["generation_tokens"]))
+            t_start_p = now - self.METRICS_PREFILL_WINDOW
+            while window and window[0][0] < t_start_p:
+                window.pop(0)
 
-                    instance.metrics.decode_throughput = scrap.decode_throughput
-                    instance.metrics.timestamp = now
-                    for cb in instance._metrics_callbacks:
-                        await cb(instance)
+            is_idle = data["running_reqs"] == 0 and data["waiting_reqs"] == 0
 
-            scrap.last_prompt_tokens = data["prompt_tokens"]
-            scrap.last_generation_tokens = data["generation_tokens"]
-            scrap.last_scrape_time = now
-            scrap.running_reqs = data["running_reqs"]
-            scrap.waiting_reqs = data["waiting_reqs"]
-            scrap.kv_cache_usage = data["kv_cache_usage"]
+            # --- Prefill: raw window average (no EMA, it's already smooth) ---
+            if len(window) >= 2:
+                dt_p = window[-1][0] - window[0][0]
+                dp = window[-1][1] - window[0][1]
+                raw_prefill = max(0, dp / dt_p) if dt_p > 0 else 0
+            else:
+                raw_prefill = 0
+
+            # --- Decode: window average of adjacent-pair rates, then EMA ---
+            t_start_d = now - self.METRICS_DECODE_WINDOW
+            decode_win = [w for w in window if w[0] >= t_start_d]
+            raw_decode = 0.0
+            if len(decode_win) >= 2:
+                rates = []
+                for i in range(1, len(decode_win)):
+                    dt = decode_win[i][0] - decode_win[i - 1][0]
+                    if dt > 0:
+                        dg = decode_win[i][2] - decode_win[i - 1][2]
+                        rates.append(max(0, dg / dt))
+                raw_decode = sum(rates) / len(rates) if rates else 0.0
+
+            # Prefill: EMA over window average
+            if is_idle:
+                scrap.prefill_throughput *= (1 - self.METRICS_PREFILL_ALPHA)
+            else:
+                scrap.prefill_throughput = (
+                    self.METRICS_PREFILL_ALPHA * raw_prefill
+                    + (1 - self.METRICS_PREFILL_ALPHA) * scrap.prefill_throughput
+                )
+            instance.metrics.prefill_throughput = scrap.prefill_throughput
+            # Decode: EMA smoothing
+            if is_idle:
+                scrap.decode_throughput *= (1 - self.METRICS_DECODE_ALPHA)
+            else:
+                scrap.decode_throughput = (
+                    self.METRICS_DECODE_ALPHA * raw_decode
+                    + (1 - self.METRICS_DECODE_ALPHA) * scrap.decode_throughput
+                )
+            # Snap near-zero values to avoid scientific notation display
+            if scrap.prefill_throughput < self.THRESHOLD_ZERO:
+                scrap.prefill_throughput = 0.0
+            if scrap.decode_throughput < self.THRESHOLD_ZERO:
+                scrap.decode_throughput = 0.0
+            instance.metrics.decode_throughput = scrap.decode_throughput
+            instance.metrics.timestamp = now
+            for cb in instance._metrics_callbacks:
+                await cb(instance)
 
             await asyncio.sleep(self.METRICS_INTERVAL)

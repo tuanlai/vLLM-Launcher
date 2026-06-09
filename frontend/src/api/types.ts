@@ -9,6 +9,8 @@ export interface Metrics {
   prefill_throughput: number
   decode_throughput: number
   total_tokens: number
+  prompt_tokens: number
+  generation_tokens: number
   requests_active: number
   requests_waiting: number
   gpu_cache_usage: number
@@ -46,6 +48,8 @@ export const DEFAULT_METRICS: Metrics = {
   prefill_throughput: 0,
   decode_throughput: 0,
   total_tokens: 0,
+  prompt_tokens: 0,
+  generation_tokens: 0,
   requests_active: 0,
   requests_waiting: 0,
   gpu_cache_usage: 0,

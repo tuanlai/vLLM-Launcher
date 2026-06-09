@@ -10,13 +10,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MetricsScrapState:
-    """Per-instance state for delta-based throughput calculation."""
-    last_prompt_tokens: int = 0
-    last_generation_tokens: int = 0
-    last_scrape_time: float = 0.0
-    running_reqs: int = 0
-    waiting_reqs: int = 0
-    kv_cache_usage: float = 0.0
+    """Per-instance state for sliding-window throughput calculation."""
     # Smoothed throughput values (exponential moving average)
     prefill_throughput: float = 0.0
     decode_throughput: float = 0.0
