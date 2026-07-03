@@ -109,3 +109,42 @@ export interface ChatMessage {
   content: string
   thinking?: string
 }
+
+// vLLM capabilities detected at startup
+export interface Capabilities {
+  quantization_methods: string[] | null
+  load_formats: string[] | null
+  dtypes: string[] | null
+  kv_cache_dtypes: string[] | null
+  tool_call_parsers: string[] | null
+}
+
+// Token Usage types
+export interface UsageByIP {
+  ip: string
+  prompt_tokens: number
+  generation_tokens: number
+  requests: number
+  models: string
+}
+
+export interface UsageDailyRow {
+  date: string
+  prompt_tokens: number
+  generation_tokens: number
+  requests: number
+}
+
+export interface UsageTodayResponse {
+  date: string
+  ips: UsageByIP[]
+}
+
+export interface UsageIpDetailResponse {
+  ip: string
+  date_range: { start: string | null; end: string | null }
+  total_prompt_tokens: number
+  total_generation_tokens: number
+  total_requests: number
+  daily: UsageDailyRow[]
+}

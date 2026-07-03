@@ -5,12 +5,13 @@ import VRAMIndicator from './VRAMIndicator'
 import PresetManager from './PresetManager'
 import { ChevronIcon, CopyIcon } from './icons'
 import { useI18n } from '../i18n'
-import type { VRAMCheckResult } from '../api/types'
+import type { VRAMCheckResult, Capabilities } from '../api/types'
 
 interface ConfigFormProps {
   onSubmit: (config: Record<string, any>) => void
   disabled?: boolean
   initialConfig?: Record<string, any> | null
+  capabilities?: Capabilities | null
 }
 
 interface ConfigState {
@@ -209,7 +210,7 @@ function Section({
   )
 }
 
-export default function ConfigForm({ onSubmit, disabled, initialConfig }: ConfigFormProps) {
+export default function ConfigForm({ onSubmit, disabled, initialConfig, capabilities }: ConfigFormProps) {
   const { t } = useI18n()
 
   const buildInitial = (): ConfigState => {
@@ -249,6 +250,11 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
   const [config, setConfig] = useState<ConfigState>(buildInitial)
   const [vramResult, setVramResult] = useState<VRAMCheckResult | null>(null)
   const [copied, setCopied] = useState(false)
+
+  // Format a vLLM option value into a readable label
+  const optLabel = (val: string): string =>
+    val.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+       .split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
   const update = <K extends keyof ConfigState>(key: K, value: ConfigState[K]) => {
     setConfig((prev) => ({ ...prev, [key]: value }))
@@ -468,10 +474,9 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
               onChange={(e) => update('quantization', e.target.value)}
             >
               <option value="">{t('config.none')}</option>
-              <option value="awq">AWQ</option>
-              <option value="gptq">GPTQ</option>
-              <option value="squeezellm">SqueezeLLM</option>
-              <option value="fp8">FP8</option>
+              {(capabilities?.quantization_methods || []).map((m) => (
+                <option key={m} value={m}>{optLabel(m)}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">
@@ -482,9 +487,9 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
               onChange={(e) => update('dtype', e.target.value)}
             >
               <option value="">{t('config.auto')}</option>
-              <option value="float16">float16</option>
-              <option value="bfloat16">bfloat16</option>
-              <option value="float32">float32</option>
+              {(capabilities?.dtypes || []).filter((d) => d !== 'auto').map((d) => (
+                <option key={d} value={d}>{optLabel(d)}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -497,14 +502,9 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
               value={config.kv_cache_dtype}
               onChange={(e) => update('kv_cache_dtype', e.target.value)}
             >
-              <option value="auto">auto</option>
-              <option value="fp8_e4m3">fp8_e4m3</option>
-              <option value="fp8_e5m2">fp8_e5m2</option>
-              <option value="fp8">fp8</option>
-              <option value="fp8_naive">fp8_naive</option>
-              <option value="float16">float16</option>
-              <option value="bfloat16">bfloat16</option>
-              <option value="float32">float32</option>
+              {(capabilities?.kv_cache_dtypes || ['auto']).map((d) => (
+                <option key={d} value={d}>{d === 'auto' ? t('config.auto') : optLabel(d)}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">
@@ -568,24 +568,20 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
               onChange={(e) => update('tool_call_parser', e.target.value)}
             >
               <option value="">{t('config.none')}</option>
-              <option value="hermes">hermes</option>
-              <option value="llama3_json">llama3_json</option>
-              <option value="mistral">mistral</option>
-              <option value="internlm">internlm</option>
-              <option value="qwen3_coder">qwen3_coder</option>
+              {(capabilities?.tool_call_parsers || []).map((p) => (
+                <option key={p} value={p}>{optLabel(p)}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">
             <label className="input-label">{t('config.reasoningParser')}</label>
-            <select
+            <input
+              type="text"
               className="input"
+              placeholder={t('config.none')}
               value={config.reasoning_parser}
               onChange={(e) => update('reasoning_parser', e.target.value)}
-            >
-              <option value="">{t('config.none')}</option>
-              <option value="deepseek_r1">deepseek_r1</option>
-              <option value="qwen3">qwen3</option>
-            </select>
+            />
           </div>
         </div>
 
@@ -665,11 +661,9 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig }: Config
             value={config.load_format}
             onChange={(e) => update('load_format', e.target.value)}
           >
-            <option value="auto">auto</option>
-            <option value="pt">pt</option>
-            <option value="safetensors">safetensors</option>
-            <option value="npcaches">npcaches</option>
-            <option value="dummy">dummy</option>
+            {(capabilities?.load_formats || ['auto']).map((f) => (
+                <option key={f} value={f}>{f === 'auto' ? t('config.auto') : optLabel(f)}</option>
+              ))}
           </select>
         </div>
       </Section>

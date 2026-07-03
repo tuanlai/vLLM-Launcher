@@ -4,7 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import InstanceCard from '../components/InstanceCard'
 import ConfigForm from '../components/ConfigForm'
 import { useI18n } from '../i18n'
+import { API_BASE } from '../api/config'
 import type { UseWebSocketReturn, InstanceStatus } from '../api/websocket'
+import type { Capabilities } from '../api/types'
 
 interface Toast {
   type: 'success' | 'error'
@@ -29,6 +31,16 @@ export default function Instances({ ws }: InstancesProps) {
     orphans: Array<{ pid: number; port: number | null; model: string }>
   } | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
+
+  // Fetch capabilities early when landing on the page
+  useEffect(() => {
+    if (capabilities) return
+    fetch(`${API_BASE}/api/capabilities`)
+      .then((r) => r.json())
+      .then((data) => { if (data) setCapabilities(data) })
+      .catch(() => {})
+  }, [capabilities])
 
   const showToast = useCallback((type: Toast['type'], message: string) => {
     setToast({ type, message })
@@ -187,7 +199,7 @@ export default function Instances({ ws }: InstancesProps) {
               </button>
             </div>
             <div className="instances-modal__body">
-              <ConfigForm onSubmit={handleCreate} disabled={creating} initialConfig={duplicateConfig} />
+              <ConfigForm onSubmit={handleCreate} disabled={creating} initialConfig={duplicateConfig} capabilities={capabilities} />
             </div>
           </div>
         </div>

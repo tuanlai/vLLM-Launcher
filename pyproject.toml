@@ -1,6 +1,6 @@
 [project]
 name = "vllm-launcher"
-version = "1.0.0"
+version = "1.0.2"
 description = "Web-based vLLM inference server launcher with multi-instance management"
 license = {text = "MIT"}
 authors = [{name = "vLLM Launcher Contributors"}]
