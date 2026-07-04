@@ -3,7 +3,7 @@
 [English](README.md) | 中文
 
 基于 Web 的 [vLLM](https://github.com/vllm-project/vllm) 推理服务器启动器和管理器。通过简洁的界面启动、监控和管理多个 vLLM 实例。
-
+![image](https://github.com/tuanlai/vLLM-Launcher/blob/master/screenshot.png)
 ## 功能特性
 
 - **多实例管理** — 在一个界面中创建、启动、停止和删除多个 vLLM 服务实例
