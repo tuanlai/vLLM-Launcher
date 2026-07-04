@@ -1,9 +1,8 @@
 # vLLM Launcher
 
 English | [中文](README_zh.md)
-
 A web-based launcher and manager for [vLLM](https://github.com/vllm-project/vllm) inference servers. Launch, monitor, and manage multiple vLLM instances through a clean, responsive UI.
-
+![image](https://github.com/tuanlai/vLLM-Launcher/edit/master/screenshot.png)
 ## Features
 
 - **Multi-instance management** — Create, start, stop, and delete multiple vLLM server instances from one interface
