@@ -56,70 +56,121 @@ class VLLMConfig:
     extra_args: str = ""
     env_vars: Optional[dict[str, str]] = None
 
+    # New Docker fields (all defaults, backward-compatible)
+    launch_mode: str = "direct"
+    docker_image: str = ""
+    docker_gpus: str = ""
+    docker_shm_size: str = ""
+    docker_network: str = "host"
+    docker_ipc: str = "host"
+    docker_volume_mounts: list[dict[str, str]] = field(default_factory=list)
+
     def to_command(self, python_path: str = "python") -> list[str]:
+        if self.launch_mode == "docker":
+            return self._to_docker_command(python_path)
+
         vllm_bin = str(Path(python_path).parent / "vllm")
         cmd = [
             vllm_bin, "serve", self.model,
         ]
 
-        # Only include args that differ from defaults
-        if self.tensor_parallel_size != 1:
-            cmd += ["--tensor-parallel-size", str(self.tensor_parallel_size)]
-        if self.port != 8000:
-            cmd += ["--port", str(self.port)]
-        if self.host != "0.0.0.0":
-            cmd += ["--host", self.host]
-        if self.gpu_memory_utilization != 0.9:
-            cmd += ["--gpu-memory-utilization", str(self.gpu_memory_utilization)]
-        if self.max_model_len is not None:
-            cmd += ["--max-model-len", str(self.max_model_len)]
-        if self.quantization is not None:
-            cmd += ["--quantization", self.quantization]
-        if self.dtype is not None:
-            cmd += ["--dtype", self.dtype]
-        if self.kv_cache_dtype is not None:
-            cmd += ["--kv-cache-dtype", self.kv_cache_dtype]
-        if self.trust_remote_code:
-            cmd += ["--trust-remote-code"]
-        if self.enforce_eager:
-            cmd += ["--enforce-eager"]
-        if self.enable_chunked_prefill:
-            cmd += ["--enable-chunked-prefill"]
-        if self.enable_auto_tool_choice:
-            cmd += ["--enable-auto-tool-choice"]
-        if self.tool_call_parser is not None:
-            cmd += ["--tool-call-parser", self.tool_call_parser]
-        if self.reasoning_parser is not None:
-            cmd += ["--reasoning-parser", self.reasoning_parser]
-        if self.speculative_config is not None:
-            cmd += ["--speculative-config", self.speculative_config]
-        if self.seed is not None:
-            cmd += ["--seed", str(self.seed)]
-        if self.max_num_seqs is not None:
-            cmd += ["--max-num-seqs", str(self.max_num_seqs)]
-        if self.max_num_batched_tokens is not None:
-            cmd += ["--max-num-batched-tokens", str(self.max_num_batched_tokens)]
-        if self.swap_space != 4:
-            cmd += ["--swap-space", str(self.swap_space)]
-        if self.block_size is not None:
-            cmd += ["--block-size", str(self.block_size)]
-        if self.enable_prefix_caching is not None:
-            if self.enable_prefix_caching:
-                cmd += ["--enable-prefix-caching"]
-            else:
-                cmd += ["--no-enable-prefix-caching"]
-        if self.disable_log_stats:
-            cmd += ["--disable-log-stats"]
-        if self.load_format != "auto":
-            cmd += ["--load-format", self.load_format]
-        if self.lora is not None:
-            cmd += ["--lora", self.lora]
-        if self.served_model_name is not None:
-            cmd += ["--served-model-name", self.served_model_name]
-        if self.extra_args.strip():
-            cmd += shlex.split(self.extra_args)
+        # Reuse the shared flag builder (backward-compatible)
+        cmd += self._build_flag_args()
 
         return cmd
+
+    # --- Docker mode helpers ---
+
+    def _to_docker_command(self, python_path: str = "python") -> list[str]:
+        """Build a docker run command for the vLLM instance."""
+        cmd = ["docker", "run", "--rm"]
+        if self.docker_gpus:
+            cmd += ["--gpus", self.docker_gpus]
+        if self.docker_network:
+            cmd += ["--network", self.docker_network]
+        if self.docker_ipc:
+            cmd += ["--ipc", self.docker_ipc]
+        if self.docker_shm_size:
+            cmd += ["--shm-size", self.docker_shm_size]
+        if self.docker_volume_mounts:
+            for m in self.docker_volume_mounts:
+                mode = m.get("mode", "ro")
+                cmd += ["-v", f"{m['host_path']}:{m['container_path']}:{mode}"]
+        if self.env_vars:
+            for k, v in self.env_vars.items():
+                cmd += ["-e", f"{k}={v}"]
+        cmd.append(self.docker_image)
+        # Append vllm serve command inside container
+        serve_cmd = self.to_serve_cmd(python_path)
+        cmd += serve_cmd
+        return cmd
+
+    def to_serve_cmd(self, python_path: str = "python") -> list[str]:
+        """Return vllm serve arguments (used inside docker container)."""
+        vllm_bin = str(Path(python_path).parent / "vllm")
+        cmd = [vllm_bin, "serve", self.model]
+        cmd += self._build_flag_args()
+        return cmd
+
+    def _build_flag_args(self) -> list[str]:
+        """Extract common vLLM flag args (shared by direct/docker modes)."""
+        args = []
+        if self.tensor_parallel_size != 1:
+            args += ["--tensor-parallel-size", str(self.tensor_parallel_size)]
+        if self.port != 8000:
+            args += ["--port", str(self.port)]
+        if self.host != "0.0.0.0":
+            args += ["--host", self.host]
+        if self.gpu_memory_utilization != 0.9:
+            args += ["--gpu-memory-utilization", str(self.gpu_memory_utilization)]
+        if self.max_model_len is not None:
+            args += ["--max-model-len", str(self.max_model_len)]
+        if self.quantization is not None:
+            args += ["--quantization", self.quantization]
+        if self.dtype is not None:
+            args += ["--dtype", self.dtype]
+        if self.kv_cache_dtype is not None:
+            args += ["--kv-cache-dtype", self.kv_cache_dtype]
+        if self.trust_remote_code:
+            args += ["--trust-remote-code"]
+        if self.enforce_eager:
+            args += ["--enforce-eager"]
+        if self.enable_chunked_prefill:
+            args += ["--enable-chunked-prefill"]
+        if self.enable_auto_tool_choice:
+            args += ["--enable-auto-tool-choice"]
+        if self.tool_call_parser is not None:
+            args += ["--tool-call-parser", self.tool_call_parser]
+        if self.reasoning_parser is not None:
+            args += ["--reasoning-parser", self.reasoning_parser]
+        if self.speculative_config is not None:
+            args += ["--speculative-config", self.speculative_config]
+        if self.seed is not None:
+            args += ["--seed", str(self.seed)]
+        if self.max_num_seqs is not None:
+            args += ["--max-num-seqs", str(self.max_num_seqs)]
+        if self.max_num_batched_tokens is not None:
+            args += ["--max-num-batched-tokens", str(self.max_num_batched_tokens)]
+        if self.swap_space != 4:
+            args += ["--swap-space", str(self.swap_space)]
+        if self.block_size is not None:
+            args += ["--block-size", str(self.block_size)]
+        if self.enable_prefix_caching is not None:
+            if self.enable_prefix_caching:
+                args += ["--enable-prefix-caching"]
+            else:
+                args += ["--no-enable-prefix-caching"]
+        if self.disable_log_stats:
+            args += ["--disable-log-stats"]
+        if self.load_format != "auto":
+            args += ["--load-format", self.load_format]
+        if self.lora is not None:
+            args += ["--lora", self.lora]
+        if self.served_model_name is not None:
+            args += ["--served-model-name", self.served_model_name]
+        if self.extra_args.strip():
+            args += shlex.split(self.extra_args)
+        return args
 
 
 @dataclass
