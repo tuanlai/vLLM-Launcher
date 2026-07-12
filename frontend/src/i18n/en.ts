@@ -5,6 +5,7 @@ const en = {
   'nav.logs': 'Logs',
   'nav.playground': 'Playground',
   'nav.settings': 'Settings',
+  'nav.usage': 'Usage Stats',
 
   // Dashboard
   'dashboard.title': 'Dashboard',

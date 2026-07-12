@@ -7,6 +7,7 @@ const zh: Record<TranslationKey, string> = {
   'nav.logs': '日志',
   'nav.playground': '测试台',
   'nav.settings': '设置',
+  'nav.usage': '用量统计',
 
   // 仪表盘
   'dashboard.title': '仪表盘',
