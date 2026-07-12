@@ -50,6 +50,14 @@ async def lifespan(app: FastAPI):
                 manager._collect_metrics(inst.id)
             )
 
+    # Check Docker availability
+    try:
+        docker_check = await asyncio.create_subprocess_exec("docker", "version")
+        if docker_check:
+            logger.info("Docker is available")
+    except:
+        logger.info("Docker not available")
+
     yield
 
     # Shutdown: clean up WebSocket connections and stop all instances

@@ -15,6 +15,7 @@ from .settings import create_settings_router
 from .gpu import create_gpu_router
 from .files import create_files_router
 from .ws import create_ws_router
+from .docker import create_docker_router
 
 
 def register_routes(
@@ -33,6 +34,7 @@ def register_routes(
     app.include_router(create_gpu_router(manager, vram_checker))
     app.include_router(create_files_router())
     app.include_router(create_ws_router(manager, ws_manager))
+    app.include_router(create_docker_router())
 
     @app.get("/api/health")
     async def health():
