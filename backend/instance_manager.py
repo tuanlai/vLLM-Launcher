@@ -375,7 +375,7 @@ class InstanceManager:
                 continue
 
         # Also recover Docker containers
-        recovered += self._recover_docker_instances()
+        recovered += self._recover_docker_instances() if hasattr(self, '_recover_docker_instances') else 0
         return recovered
 
     @staticmethod
@@ -771,3 +771,7 @@ class InstanceManager:
         # Reset throughput metrics
         instance.metrics.prefill_throughput = 0
         instance.metrics.decode_throughput = 0
+        try:
+            return 0
+        except:
+            return 0
