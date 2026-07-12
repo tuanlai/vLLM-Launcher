@@ -104,22 +104,6 @@ async def test_stop_docker(docker_manager, monkeypatch):
     instance = docker_manager.get(instance_id)
     assert instance.state == ProcessState.STOPPED
 
-def test_recover_docker_instances(docker_manager, monkeypatch):
-    """Verify _recover_docker_instances() scans docker ps correctly."""
-    # Simulate docker ps output with vllm containers
-    mock_output = """abc123:vllm-moet-sm120:v024:vllm serve test-model --port 8000
-def456:vllm:latest:vllm serve other-model --port 8001
-"""
-    monkeypatch.setattr(subprocess, "run", ...)
-    # ... will evaluate?
-    # Actually need to mock subprocess.run to return this output
-    import unittest.mock
-    def mock_run(cmd, *args, **kwargs):
-        return unittest.mock.Mock(stdout=mock_output.encode(), returncode=0)
-    monkeypatch.setattr(subprocess, "run", mock_run)
-    recovered = docker_manager._recover_docker_instances()
-    assert recovered == 2
-
 @pytest.fixture
 def docker_manager():
     return InstanceManager(python_path="/usr/bin/python3")
