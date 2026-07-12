@@ -1,4 +1,7 @@
 import pytest
+import asyncio
+import subprocess
+from unittest.mock import AsyncMock
 from instance_manager import InstanceManager, VLLMConfig, ProcessState
 
 
@@ -78,3 +81,45 @@ def test_to_command_docker_defaults():
     assert "--shm-size" not in cmd
     assert "-v" not in cmd
     assert "-e" not in cmd
+
+
+@pytest.mark.asyncio
+async def test_start_docker(docker_manager, monkeypatch):
+    """Verify _start_docker() creates subprocess correctly."""
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", AsyncMock())
+    instance_id = docker_manager.create(VLLMConfig(model="test", launch_mode="docker", docker_image="test-img"))
+    result = await docker_manager.start(instance_id)
+    assert result is True
+    instance = docker_manager.get(instance_id)
+    assert instance.state == ProcessState.STARTING
+
+
+@pytest.mark.asyncio
+async def test_stop_docker(docker_manager, monkeypatch):
+    """Verify _stop_docker() stops container correctly."""
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", AsyncMock())
+    instance_id = docker_manager.create(VLLMConfig(model="test", launch_mode="docker", docker_image="test-img"))
+    await docker_manager.start(instance_id)
+    await docker_manager.stop(instance_id)
+    instance = docker_manager.get(instance_id)
+    assert instance.state == ProcessState.STOPPED
+
+def test_recover_docker_instances(docker_manager, monkeypatch):
+    """Verify _recover_docker_instances() scans docker ps correctly."""
+    # Simulate docker ps output with vllm containers
+    mock_output = """abc123:vllm-moet-sm120:v024:vllm serve test-model --port 8000
+def456:vllm:latest:vllm serve other-model --port 8001
+"""
+    monkeypatch.setattr(subprocess, "run", ...)
+    # ... will evaluate?
+    # Actually need to mock subprocess.run to return this output
+    import unittest.mock
+    def mock_run(cmd, *args, **kwargs):
+        return unittest.mock.Mock(stdout=mock_output.encode(), returncode=0)
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    recovered = docker_manager._recover_docker_instances()
+    assert recovered == 2
+
+@pytest.fixture
+def docker_manager():
+    return InstanceManager(python_path="/usr/bin/python3")

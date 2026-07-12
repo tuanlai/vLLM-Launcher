@@ -373,6 +373,9 @@ class InstanceManager:
                 recovered += 1
             except (psutil.NoSuchProcess, psutil.AccessDenied, IndexError):
                 continue
+
+        # Also recover Docker containers
+        recovered += self._recover_docker_instances()
         return recovered
 
     @staticmethod
@@ -487,6 +490,9 @@ class InstanceManager:
 
         cmd = instance.config.to_command(self._python_path)
 
+        if instance.config.launch_mode == "docker":
+            return await self._start_docker(instance_id, instance, cmd)
+
         # Ensure venv bin is in PATH so vllm, ninja, etc. are found
         venv_bin = str(Path(self._python_path).parent)
         env = {
@@ -534,6 +540,10 @@ class InstanceManager:
     async def stop(self, instance_id: str) -> None:
         instance = self.get(instance_id)
         if instance.state not in (ProcessState.STARTING, ProcessState.RUNNING):
+            return
+
+        if instance.config.launch_mode == "docker":
+            await self._stop_docker(instance_id)
             return
 
         instance.state = ProcessState.STOPPING
@@ -711,3 +721,53 @@ class InstanceManager:
                 await cb(instance)
 
             await asyncio.sleep(self.METRICS_INTERVAL)
+    # --- Docker helper methods ---
+
+    async def _start_docker(self, instance_id: str, instance: Instance, cmd: list[str]) -> bool:
+        """Start a vLLM instance inside a Docker container."""
+        try:
+            instance._process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            instance.pid = instance._process.pid
+            instance._read_output_task = asyncio.create_task(self._read_output(instance_id))
+            instance._monitor_task = asyncio.create_task(self._monitor_process(instance_id))
+            instance._metrics_task = asyncio.create_task(
+                self._collect_metrics(instance_id)
+            )
+            return True
+        except FileNotFoundError:
+            instance.state = ProcessState.ERROR
+            instance.last_error = "docker command not found"
+            return False
+        except Exception as e:
+            instance.state = ProcessState.ERROR
+            instance.last_error = str(e)
+            return False
+    async def _stop_docker(self, instance_id: str) -> None:
+        """Stop a Docker-run vLLM instance."""
+        instance = self.get(instance_id)
+        if instance.state not in (ProcessState.STARTING, ProcessState.RUNNING):
+            return
+        instance.state = ProcessState.STOPPING
+        for task in (instance._metrics_task, instance._read_output_task, instance._monitor_task):
+            if task is not None:
+                task.cancel()
+            instance._metrics_task = None
+            instance._read_output_task = None
+            instance._monitor_task = None
+        try:
+            if instance._process:
+                await asyncio.create_subprocess_exec("docker", "stop", instance_id)
+            elif instance.pid:
+                os.kill(instance.pid, signal.SIGTERM)
+        except:
+            pass
+        instance.state = ProcessState.STOPPED
+        instance.pid = None
+        instance._process = None
+        # Reset throughput metrics
+        instance.metrics.prefill_throughput = 0
+        instance.metrics.decode_throughput = 0
