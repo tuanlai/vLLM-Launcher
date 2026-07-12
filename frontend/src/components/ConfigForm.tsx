@@ -5,7 +5,8 @@ import VRAMIndicator from './VRAMIndicator'
 import PresetManager from './PresetManager'
 import { ChevronIcon, CopyIcon } from './icons'
 import { useI18n } from '../i18n'
-import type { VRAMCheckResult, Capabilities } from '../api/types'
+import type { VRAMCheckResult, Capabilities, DockerStatus } from '../api/types'
+import { API_BASE } from '../api/config'
 
 interface ConfigFormProps {
   onSubmit: (config: Record<string, any>) => void
@@ -43,6 +44,13 @@ interface ConfigState {
   lora: string
   extra_args: string
   env_vars: { key: string; value: string; valid: boolean }[]
+  launch_mode: 'direct' | 'docker'
+  docker_image: string
+  docker_gpus: string
+  docker_shm_size: string
+  docker_network: string
+  docker_ipc: string
+  docker_volume_mounts: Array<{host_path: string; container_path: string; mode: string}>
 }
 
 const DEFAULTS: ConfigState = {
@@ -74,9 +82,44 @@ const DEFAULTS: ConfigState = {
   lora: '',
   extra_args: '',
   env_vars: [],
+  launch_mode: 'direct',
+  docker_image: '',
+  docker_gpus: '',
+  docker_shm_size: '',
+  docker_network: 'host',
+  docker_ipc: 'host',
+  docker_volume_mounts: [],
 }
 
 function buildCommand(config: ConfigState): string {
+  if (config.launch_mode === 'docker') {
+    let cmd = 'docker run --rm'
+    if (config.docker_gpus) cmd += ` --gpus '${config.docker_gpus}'`
+    if (config.docker_network) cmd += ` --network ${config.docker_network}`
+    if (config.docker_ipc) cmd += ` --ipc ${config.docker_ipc}`
+    if (config.docker_shm_size) cmd += ` --shm-size ${config.docker_shm_size}`
+    if (config.docker_volume_mounts?.length) {
+      for (const m of config.docker_volume_mounts) {
+        cmd += ` -v ${m.host_path}:${m.container_path}:${m.mode}`
+      }
+    }
+    if (config.env_vars?.length) {
+      for (const env of config.env_vars) {
+        if (env.valid && env.key.trim()) {
+          cmd += ` -e ${env.key.trim()}=${env.value.trim()}`
+        }
+      }
+    }
+    cmd += ` ${config.docker_image}`
+    cmd += ` vllm serve ${config.model}`
+    if (config.served_model_name) cmd += ` --served-model-name ${config.served_model_name}`
+    if (config.port !== DEFAULTS.port) cmd += ` --port ${config.port}`
+    // ... reuse existing flag logic
+    // But simpler: just append the vllm args
+    cmd += buildDirectFlags(config)
+    return cmd
+  }
+
   const parts: string[] = ['vllm', 'serve']
 
   if (!config.model) {
@@ -133,6 +176,41 @@ function buildCommand(config: ConfigState): string {
   }
 
   return parts.join(' ')
+}
+
+function buildDirectFlags(config: ConfigState): string {
+  // Build common vLLM flags from config
+  let flags = ''
+  if (config.port !== DEFAULTS.port) flags += ` --port ${config.port}`
+  if (config.host !== DEFAULTS.host) flags += ` --host ${config.host}`
+  if (config.tensor_parallel_size !== DEFAULTS.tensor_parallel_size)
+    flags += ` --tensor-parallel-size ${config.tensor_parallel_size}`
+  if (config.gpu_memory_utilization !== DEFAULTS.gpu_memory_utilization)
+    flags += ` --gpu-memory-utilization ${config.gpu_memory_utilization}`
+  if (config.max_model_len) flags += ` --max-model-len ${config.max_model_len}`
+  if (config.quantization) flags += ` --quantization ${config.quantization}`
+  if (config.dtype) flags += ` --dtype ${config.dtype}`
+  if (config.kv_cache_dtype !== DEFAULTS.kv_cache_dtype)
+    flags += ` --kv-cache-dtype ${config.kv_cache_dtype}`
+  if (config.trust_remote_code) flags += ' --trust-remote-code'
+  if (config.enforce_eager) flags += ' --enforce-eager'
+  if (config.enable_chunked_prefill) flags += ' --enable-chunked-prefill'
+  if (config.enable_auto_tool_choice) flags += ' --enable-auto-tool-choice'
+  if (config.tool_call_parser) flags += ` --tool-call-parser ${config.tool_call_parser}`
+  if (config.reasoning_parser) flags += ` --reasoning-parser ${config.reasoning_parser}`
+  if (config.speculative_config) flags += ` --speculative-config '${config.speculative_config}'`
+  if (config.seed) flags += ` --seed ${config.seed}`
+  if (config.max_num_seqs) flags += ` --max-num-seqs ${config.max_num_seqs}`
+  if (config.max_num_batched_tokens) flags += ` --max-num-batched-tokens ${config.max_num_batched_tokens}`
+  if (config.swap_space !== DEFAULTS.swap_space) flags += ` --swap-space ${config.swap_space}`
+  if (config.block_size) flags += ` --block-size ${config.block_size}`
+  if (config.enable_prefix_caching === 'true') flags += ' --enable-prefix-caching'
+  else if (config.enable_prefix_caching === 'false') flags += ' --no-enable-prefix-caching'
+  if (config.disable_log_stats) flags += ' --disable-log-stats'
+  if (config.load_format !== DEFAULTS.load_format) flags += ` --load-format ${config.load_format}`
+  if (config.lora) flags += ` --lora ${config.lora}`
+  if (config.extra_args.trim()) flags += ` ${config.extra_args.trim()}`
+  return flags
 }
 
 function Toggle({
@@ -212,6 +290,10 @@ function Section({
 
 export default function ConfigForm({ onSubmit, disabled, initialConfig, capabilities }: ConfigFormProps) {
   const { t } = useI18n()
+  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null)
+  useEffect(() => {
+    fetch(`${API_BASE}/api/docker/status`).then(r => r.json()).then(setDockerStatus).catch(() => setDockerStatus({available: false, containers: []}))
+  }, [])
 
   const buildInitial = (): ConfigState => {
     if (!initialConfig) return { ...DEFAULTS }
@@ -244,6 +326,13 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
       lora: initialConfig.lora ?? DEFAULTS.lora,
       extra_args: initialConfig.extra_args ?? DEFAULTS.extra_args,
       env_vars: DEFAULTS.env_vars,
+      launch_mode: initialConfig.launch_mode ?? DEFAULTS.launch_mode,
+      docker_image: initialConfig.docker_image ?? DEFAULTS.docker_image,
+      docker_gpus: initialConfig.docker_gpus ?? DEFAULTS.docker_gpus,
+      docker_shm_size: initialConfig.docker_shm_size ?? DEFAULTS.docker_shm_size,
+      docker_network: initialConfig.docker_network ?? DEFAULTS.docker_network,
+      docker_ipc: initialConfig.docker_ipc ?? DEFAULTS.docker_ipc,
+      docker_volume_mounts: initialConfig.docker_volume_mounts ?? DEFAULTS.docker_volume_mounts,
     }
   }
 
@@ -311,6 +400,13 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
         acc[v.key.trim()] = v.value.trim()
         return acc
       }, {} as Record<string, string>),
+      launch_mode: config.launch_mode,
+      docker_image: config.docker_image,
+      docker_gpus: config.docker_gpus,
+      docker_shm_size: config.docker_shm_size,
+      docker_network: config.docker_network,
+      docker_ipc: config.docker_ipc,
+      docker_volume_mounts: config.docker_volume_mounts,
     }
     onSubmit(submitConfig)
   }
@@ -359,6 +455,93 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
           }}
         />
       </div>
+
+      {/* Docker Toggle */}
+      {dockerStatus?.available !== undefined && (
+      <div className="docker-section">
+        <label className="input-label">启动方式</label>
+        <div className="launch-mode-toggle">
+          <button
+            type="button"
+            className={`toggle-btn ${config.launch_mode === 'direct' ? 'active' : ''}`}
+            onClick={() => update('launch_mode', 'direct')}
+            disabled={!dockerStatus?.available}
+          >
+            直接启动 (host)
+          </button>
+          <button
+            type="button"
+            className={`toggle-btn ${config.launch_mode === 'docker' ? 'active' : ''}`}
+            onClick={() => update('launch_mode', 'docker')}
+            disabled={!dockerStatus?.available}
+          >
+            Docker 启动
+          </button>
+        </div>
+        {config.launch_mode === 'docker' && dockerStatus?.available && (
+          <div className="docker-fields">
+            <div className="form-group">
+              <label>容器选择</label>
+              <select
+                value={config.docker_image}
+                onChange={(e) => update('docker_image', e.target.value)}
+              >
+                <option value="">— 选择容器 —</option>
+                {dockerStatus.containers.map((c) => (
+                  <option key={c.id} value={c.image}>
+                    {c.image} ({c.id.slice(0, 8)})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Docker 镜像</label>
+              <input
+                value={config.docker_image}
+                onChange={(e) => update('docker_image', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>GPU 设备</label>
+              <input
+                value={config.docker_gpus}
+                placeholder='"device=0"'
+                onChange={(e) => update('docker_gpus', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>共享内存</label>
+              <input
+                value={config.docker_shm_size}
+                placeholder="64g"
+                onChange={(e) => update('docker_shm_size', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>网络模式</label>
+              <select
+                value={config.docker_network}
+                onChange={(e) => update('docker_network', e.target.value)}
+              >
+                <option value="host">host</option>
+                <option value="bridge">bridge</option>
+                <option value="none">none</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>IPC 模式</label>
+              <select
+                value={config.docker_ipc}
+                onChange={(e) => update('docker_ipc', e.target.value)}
+              >
+                <option value="host">host</option>
+                <option value="none">none</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
 
       {/* Common Parameters */}
       <Section title={t('config.common')} defaultOpen={true}>

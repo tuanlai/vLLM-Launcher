@@ -28,6 +28,7 @@ export interface InstanceStatus {
   last_error: string | null
   metrics: Metrics
   config: Record<string, any> | null
+  launch_mode: string
 }
 
 export interface ErrorData {
@@ -95,6 +96,11 @@ export interface GPUStats {
   utilization_gpu_pct: number
   utilization_mem_pct: number
   fan_speed_pct: number
+}
+
+export interface DockerStatus {
+  available: boolean
+  containers: Array<{id: string; image: string; command: string}>
 }
 
 export interface FileEntry {
