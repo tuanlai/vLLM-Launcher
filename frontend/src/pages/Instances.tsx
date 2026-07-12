@@ -6,7 +6,7 @@ import ConfigForm from '../components/ConfigForm'
 import { useI18n } from '../i18n'
 import { API_BASE } from '../api/config'
 import type { UseWebSocketReturn, InstanceStatus } from '../api/websocket'
-import type { Capabilities } from '../api/types'
+import type { Capabilities, DockerStatus } from '../api/types'
 
 interface Toast {
   type: 'success' | 'error'
@@ -40,7 +40,14 @@ export default function Instances({ ws }: InstancesProps) {
       .then((r) => r.json())
       .then((data) => { if (data) setCapabilities(data) })
       .catch(() => {})
+    fetch(`${API_BASE}/api/docker/status`)
+      .then((r) => r.json())
+      .then((data) => { if (data) setDockerStatus(data) })
+      .catch(() => setDockerStatus({available: false, containers: []}))
   }, [capabilities])
+
+  // Docker status state
+  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null)
 
   const showToast = useCallback((type: Toast['type'], message: string) => {
     setToast({ type, message })

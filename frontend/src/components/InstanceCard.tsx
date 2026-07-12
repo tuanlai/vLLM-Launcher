@@ -119,6 +119,12 @@ export default function InstanceCard({
             <ChevronIcon open={configExpanded} />
             <span>{t('instance.configDetails')}</span>
           </button>
+          {instance.launch_mode && (
+            <div className="instance-card__config-row">
+              <span className="instance-card__config-key">启动方式</span>
+              <span className="instance-card__config-value">{instance.launch_mode}</span>
+            </div>
+          )}
           {configExpanded && (
             <div className="instance-card__config-details">
               {Object.entries(instance.config).map(([key, value]) => (
