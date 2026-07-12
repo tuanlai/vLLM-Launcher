@@ -117,3 +117,33 @@ async def test_chat_stream_not_found(client):
         json={"messages": [{"role": "user", "content": "hi"}]},
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_instance_docker(client):
+    """Verify creating a docker-mode instance works."""
+    with patch("instance_manager.InstanceManager.start", new_callable=AsyncMock, return_value=True):
+        payload = {
+            "model": "test-model",
+            "launch_mode": "docker",
+            "docker_image": "vllm-moet-sm120:v024",
+            "docker_gpus": '"device=0"',
+        }
+        resp = await client.post("/api/instances", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"]
+    assert data["instance_id"] is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_docker_instance(client):
+    """Verify deleting a docker-mode instance works."""
+    with patch("instance_manager.InstanceManager.start", new_callable=AsyncMock, return_value=True):
+        payload = {"model": "test", "port": 8001, "launch_mode": "docker", "docker_image": "img"}
+        resp = await client.post("/api/instances", json=payload)
+    assert resp.status_code == 200
+    instance_id = resp.json()["instance_id"]
+
+    resp = await client.delete(f"/api/instances/{instance_id}")
+    assert resp.status_code == 200

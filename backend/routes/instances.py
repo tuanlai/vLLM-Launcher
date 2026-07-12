@@ -45,6 +45,14 @@ def create_instances_router(manager: InstanceManager, ws_manager: WebSocketManag
             served_model_name=req.served_model_name,
             extra_args=req.extra_args,
             env_vars=req.env_vars,
+            # Docker fields
+            launch_mode=req.launch_mode,
+            docker_image=req.docker_image,
+            docker_gpus=req.docker_gpus,
+            docker_shm_size=req.docker_shm_size,
+            docker_network=req.docker_network,
+            docker_ipc=req.docker_ipc,
+            docker_volume_mounts=req.docker_volume_mounts,
         )
 
         instance_id = manager.create(config)
@@ -110,7 +118,11 @@ def create_instances_router(manager: InstanceManager, ws_manager: WebSocketManag
     @router.delete("/api/instances/{instance_id}")
     async def delete_instance(instance_id: str):
         try:
-            await manager.stop(instance_id)
+            instance = manager.get(instance_id)
+            if instance.config.launch_mode == "docker":
+                await manager.stop(instance_id)
+            else:
+                await manager.stop(instance_id)
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
 

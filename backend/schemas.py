@@ -36,6 +36,15 @@ class CreateInstanceRequest(BaseModel):
     extra_args: str = ""
     env_vars: Optional[dict[str, str]] = None
 
+    # New Docker fields
+    launch_mode: str = "direct"
+    docker_image: str = ""
+    docker_gpus: str = ""
+    docker_shm_size: str = ""
+    docker_network: str = "host"
+    docker_ipc: str = "host"
+    docker_volume_mounts: list[dict[str, str]] = Field(default_factory=list)
+
     @field_validator('extra_args')
     @classmethod
     def sanitize_extra_args(cls, v: str) -> str:
