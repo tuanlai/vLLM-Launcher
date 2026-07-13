@@ -59,10 +59,10 @@ def docker_pack_fingerprint(
     dsplit = "1" if truthy(env.get("VLLM_MOE_W2_DELTA_SPLIT")) else "0"
     dpol = san(env.get("VLLM_MOE_W2_DELTA_POLICY", "") or "need")
     delta_gb = str(env.get("VLLM_MOE_W2_DELTA_GB", "0")).strip()
-    delta_on = truthy(env.get("VLLM_MOE_W2_DELTA")) and delta_gb not in (
-        "0",
-        "",
-        "none",
+    # Delta tier is ON when DELTA_GB is a positive value OR VLLM_MOE_W2_DELTA=1
+    # is set explicitly. The README recipe enables it via DELTA_GB=1 alone.
+    delta_on = (delta_gb not in ("0", "", "none")) or truthy(
+        env.get("VLLM_MOE_W2_DELTA")
     )
     parts = [
         f"m{model_tag}",

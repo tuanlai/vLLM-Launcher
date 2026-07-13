@@ -107,7 +107,8 @@ function dockerPackFingerprint(config: ConfigState): string {
   const dsplit = truthy(env['VLLM_MOE_W2_DELTA_SPLIT']) ? '1' : '0'
   const dpol = san(env['VLLM_MOE_W2_DELTA_POLICY'] || 'need')
   const deltaGb = (env['VLLM_MOE_W2_DELTA_GB'] || '0').trim()
-  const deltaOn = truthy(env['VLLM_MOE_W2_DELTA']) && !['0', '', 'none'].includes(deltaGb)
+  // Delta tier is ON when DELTA_GB is a positive value OR VLLM_MOE_W2_DELTA=1.
+  const deltaOn = !['0', '', 'none'].includes(deltaGb) || truthy(env['VLLM_MOE_W2_DELTA'])
   return [
     `m${modelTag}`,
     `tp${config.tensor_parallel_size}`,
