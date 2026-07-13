@@ -17,6 +17,7 @@ from .files import create_files_router
 from .ws import create_ws_router
 from .docker import create_docker_router
 from .usage import create_usage_router
+from token_tracker import TokenTracker
 
 
 def register_routes(
