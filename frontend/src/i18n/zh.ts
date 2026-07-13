@@ -250,6 +250,26 @@ const zh: Record<TranslationKey, string> = {
   'logs.noLogs': '暂无日志。启动 vLLM 服务器以查看输出。',
   'logs.noFilterMatch': '没有匹配当前过滤条件的日志。',
   'logs.scrollToBottom': '滚动到底部',
+
+  // 用量统计
+  'usage.title': '用量统计',
+  'usage.subtitle': 'Token 用量与请求统计',
+  'usage.loading': '加载中...',
+  'usage.today': '今日',
+  'usage.resetToday': '重置今日',
+  'usage.resetConfirm': '确定重置今日统计？',
+  'usage.noData': '暂无用量数据',
+  'usage.ip': 'IP',
+  'usage.ipDetail': 'IP 详情',
+  'usage.inputTokens': '输入 Token 数',
+  'usage.outputTokens': '输出 Token 数',
+  'usage.total': '合计',
+  'usage.totalTokens': 'Token 总数',
+  'usage.requests': '请求数',
+  'usage.models': '模型',
+  'usage.allModels': '全部模型',
+  'usage.trend': '趋势',
+  'usage.noTrend': '暂无趋势数据',
 }
 
 export default zh

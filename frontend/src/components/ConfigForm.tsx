@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import * as React from 'react'
 import { motion } from 'framer-motion'
 import ModelSelector from './ModelSelector'
 import VRAMIndicator from './VRAMIndicator'
@@ -94,28 +94,31 @@ const DEFAULTS: ConfigState = {
 function buildCommand(config: ConfigState): string {
   if (config.launch_mode === 'docker') {
     let cmd = 'docker run --rm'
-    if (config.docker_gpus) cmd += ` --gpus '${config.docker_gpus}'`
-    if (config.docker_network) cmd += ` --network ${config.docker_network}`
-    if (config.docker_ipc) cmd += ` --ipc ${config.docker_ipc}`
-    if (config.docker_shm_size) cmd += ` --shm-size ${config.docker_shm_size}`
+    if (config.docker_gpus) cmd += ' --gpus ' + config.docker_gpus
+    if (config.docker_network) cmd += ' --network ' + config.docker_network
+    if (config.docker_ipc) cmd += ' --ipc ' + config.docker_ipc
+    if (config.docker_shm_size) cmd += ' --shm-size ' + config.docker_shm_size
     if (config.docker_volume_mounts?.length) {
       for (const m of config.docker_volume_mounts) {
-        cmd += ` -v ${m.host_path}:${m.container_path}:${m.mode}`
+        cmd += ' -v ' + m.host_path + ':' + m.container_path + ':' + m.mode
       }
     }
     if (config.env_vars?.length) {
       for (const env of config.env_vars) {
         if (env.valid && env.key.trim()) {
-          cmd += ` -e ${env.key.trim()}=${env.value.trim()}`
+          cmd += ' -e ' + env.key.trim() + '=' + env.value.trim()
         }
       }
     }
-    cmd += ` ${config.docker_image}`
-    cmd += ` vllm serve ${config.model}`
-    if (config.served_model_name) cmd += ` --served-model-name ${config.served_model_name}`
-    if (config.port !== DEFAULTS.port) cmd += ` --port ${config.port}`
-    // ... reuse existing flag logic
-    // But simpler: just append the vllm args
+    cmd += ' ' + config.docker_image
+    // Auto-mount the host model directory into the container at /model so
+    // `--model /model` resolves (matches the backend command builder).
+    if (config.model && config.model.startsWith('/')) {
+      cmd += ' -v ' + config.model + ':/model'
+    }
+    cmd += ' --model /model'
+    if (config.served_model_name) cmd += ' --served-model-name ' + config.served_model_name
+    if (config.port !== DEFAULTS.port) cmd += ' --port ' + String(config.port)
     cmd += buildDirectFlags(config)
     return cmd
   }
@@ -273,7 +276,7 @@ function Section({
   defaultOpen?: boolean
   children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = React.useState(defaultOpen)
 
   return (
     <div className="section">
@@ -290,8 +293,8 @@ function Section({
 
 export default function ConfigForm({ onSubmit, disabled, initialConfig, capabilities }: ConfigFormProps) {
   const { t } = useI18n()
-  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null)
-  useEffect(() => {
+  const [dockerStatus, setDockerStatus] = React.useState<DockerStatus | null>(null)
+  React.useEffect(() => {
     fetch(`${API_BASE}/api/docker/status`).then(r => r.json()).then(setDockerStatus).catch(() => setDockerStatus({available: false, containers: []}))
   }, [])
 
@@ -336,9 +339,9 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
     }
   }
 
-  const [config, setConfig] = useState<ConfigState>(buildInitial)
-  const [vramResult, setVramResult] = useState<VRAMCheckResult | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [config, setConfig] = React.useState<ConfigState>(buildInitial)
+  const [vramResult, setVramResult] = React.useState<VRAMCheckResult | null>(null)
+  const [copied, setCopied] = React.useState(false)
 
   // Format a vLLM option value into a readable label
   const optLabel = (val: string): string =>
@@ -349,7 +352,7 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
     setConfig((prev) => ({ ...prev, [key]: value }))
   }
 
-  const command = useMemo(() => buildCommand(config), [config])
+  const command = React.useMemo(() => buildCommand(config), [config])
 
   const handleCopy = async () => {
     try {
@@ -479,66 +482,78 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
           </button>
         </div>
         {config.launch_mode === 'docker' && dockerStatus?.available && (
-          <div className="docker-fields">
-            <div className="form-group">
-              <label>容器选择</label>
-              <select
-                value={config.docker_image}
-                onChange={(e) => update('docker_image', e.target.value)}
-              >
-                <option value="">— 选择容器 —</option>
-                {dockerStatus.containers.map((c) => (
-                  <option key={c.id} value={c.image}>
-                    {c.image} ({c.id.slice(0, 8)})
-                  </option>
-                ))}
-              </select>
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="input-label">容器选择</label>
+                <select
+                  className="input"
+                  value={config.docker_image}
+                  onChange={(e) => update('docker_image', e.target.value)}
+                >
+                  <option value="">— 选择容器 —</option>
+                  {dockerStatus.containers.map((c) => (
+                    <option key={c.id} value={c.image}>
+                      {c.image} ({c.id.slice(0, 8)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="input-label">Docker 镜像</label>
+                <input
+                  className="input"
+                  value={config.docker_image}
+                  onChange={(e) => update('docker_image', e.target.value)}
+                />
+              </div>
             </div>
-            <div className="form-group">
-              <label>Docker 镜像</label>
-              <input
-                value={config.docker_image}
-                onChange={(e) => update('docker_image', e.target.value)}
-              />
+            <div className="form-row">
+              <div className="form-group">
+                <label className="input-label">GPU 设备</label>
+                <input
+                  className="input"
+                  value={config.docker_gpus}
+                  placeholder='"device=0"'
+                  onChange={(e) => update('docker_gpus', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label className="input-label">共享内存</label>
+                <input
+                  className="input"
+                  value={config.docker_shm_size}
+                  placeholder="64g"
+                  onChange={(e) => update('docker_shm_size', e.target.value)}
+                />
+              </div>
             </div>
-            <div className="form-group">
-              <label>GPU 设备</label>
-              <input
-                value={config.docker_gpus}
-                placeholder='"device=0"'
-                onChange={(e) => update('docker_gpus', e.target.value)}
-              />
+            <div className="form-row">
+              <div className="form-group">
+                <label className="input-label">网络模式</label>
+                <select
+                  className="input"
+                  value={config.docker_network}
+                  onChange={(e) => update('docker_network', e.target.value)}
+                >
+                  <option value="host">host</option>
+                  <option value="bridge">bridge</option>
+                  <option value="none">none</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="input-label">IPC 模式</label>
+                <select
+                  className="input"
+                  value={config.docker_ipc}
+                  onChange={(e) => update('docker_ipc', e.target.value)}
+                >
+                  <option value="host">host</option>
+                  <option value="none">none</option>
+                </select>
+              </div>
             </div>
-            <div className="form-group">
-              <label>共享内存</label>
-              <input
-                value={config.docker_shm_size}
-                placeholder="64g"
-                onChange={(e) => update('docker_shm_size', e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>网络模式</label>
-              <select
-                value={config.docker_network}
-                onChange={(e) => update('docker_network', e.target.value)}
-              >
-                <option value="host">host</option>
-                <option value="bridge">bridge</option>
-                <option value="none">none</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label>IPC 模式</label>
-              <select
-                value={config.docker_ipc}
-                onChange={(e) => update('docker_ipc', e.target.value)}
-              >
-                <option value="host">host</option>
-                <option value="none">none</option>
-              </select>
-            </div>
-          </div>
+          </>
         )}
       </div>
       )}
@@ -1091,6 +1106,38 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
           font-size: 12px;
           padding: 6px 12px;
           justify-content: center;
+        }
+        .docker-section {
+          margin-bottom: 24px;
+        }
+        .launch-mode-toggle {
+          display: flex;
+          gap: 8px;
+          margin: 8px 0;
+        }
+        .launch-mode-toggle button {
+          padding: 8px 16px;
+          border: 1px solid var(--hairline);
+          border-radius: var(--radius-sm);
+          font-size: 13px;
+          font-weight: 500;
+          transition: all 0.15s ease;
+          cursor: pointer;
+        }
+        .launch-mode-toggle button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .launch-mode-toggle button.active {
+          background: var(--primary);
+          color: white;
+          border-color: var(--primary);
+        }
+        .docker-fields {
+          margin-top: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
         }
       `}</style>
     </form>

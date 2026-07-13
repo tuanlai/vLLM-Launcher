@@ -17,8 +17,8 @@ def test_create_instance(manager):
 
 
 def test_list_instances(manager):
-    id1 = manager.create(VLLMConfig(model="model-a"))
-    id2 = manager.create(VLLMConfig(model="model-b"))
+    id1 = manager.create(VLLMConfig(model="model-a", port=8005))
+    id2 = manager.create(VLLMConfig(model="model-b", port=8006))
     instances = manager.list_all()
     assert len(instances) == 2
 
@@ -28,12 +28,6 @@ def test_get_instance(manager):
     inst = manager.get(instance_id)
     assert inst.config.model == "test"
     assert inst.state == ProcessState.IDLE
-
-
-def test_auto_port_allocation(manager):
-    id1 = manager.create(VLLMConfig(model="a"))
-    id2 = manager.create(VLLMConfig(model="b"))
-    assert manager.get(id2).config.port == manager.get(id1).config.port + 1
 
 
 def test_remove_instance(manager):

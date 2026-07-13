@@ -28,6 +28,18 @@ export interface UseWebSocketReturn {
 const MAX_LOGS = 3000
 const MAX_METRICS_HISTORY = 120
 
+function formatErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail) return detail
+  if (Array.isArray(detail)) {
+    const msg = detail
+      .map((d: any) => d?.msg ?? d?.message ?? (typeof d === 'string' ? d : ''))
+      .filter(Boolean)
+      .join('; ')
+    return msg || fallback
+  }
+  return fallback
+}
+
 export function useWebSocket(): UseWebSocketReturn {
   const [instances, setInstances] = useState<InstanceStatus[]>([])
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null)
@@ -201,7 +213,7 @@ export function useWebSocket(): UseWebSocketReturn {
     })
     if (!res.ok) {
       const err = await res.json()
-      throw new Error(err.detail || 'Failed to create instance')
+      throw new Error(formatErrorDetail(err.detail, 'Failed to create instance'))
     }
     const data = await res.json()
     await refreshInstances()
@@ -214,7 +226,7 @@ export function useWebSocket(): UseWebSocketReturn {
     })
     if (!res.ok) {
       const err = await res.json()
-      throw new Error(err.detail || 'Failed to start instance')
+      throw new Error(formatErrorDetail(err.detail, 'Failed to start instance'))
     }
     await refreshInstances()
   }, [refreshInstances])
@@ -225,7 +237,7 @@ export function useWebSocket(): UseWebSocketReturn {
     })
     if (!res.ok) {
       const err = await res.json()
-      throw new Error(err.detail || 'Failed to stop instance')
+      throw new Error(formatErrorDetail(err.detail, 'Failed to stop instance'))
     }
     await refreshInstances()
   }, [refreshInstances])
@@ -236,7 +248,7 @@ export function useWebSocket(): UseWebSocketReturn {
     })
     if (!res.ok) {
       const err = await res.json()
-      throw new Error(err.detail || 'Failed to delete instance')
+      throw new Error(formatErrorDetail(err.detail, 'Failed to delete instance'))
     }
     // Clean up local data
     logsMap.current.delete(instanceId)
@@ -294,7 +306,7 @@ export function useWebSocket(): UseWebSocketReturn {
     const res = await fetch(`${API_BASE}/api/ports/clean`, { method: 'POST' })
     if (!res.ok) {
       const err = await res.json()
-      throw new Error(err.detail || 'Failed to clean ports')
+      throw new Error(formatErrorDetail(err.detail, 'Failed to clean ports'))
     }
     const data = await res.json()
     await refreshInstances()

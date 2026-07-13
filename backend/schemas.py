@@ -27,7 +27,7 @@ class CreateInstanceRequest(BaseModel):
     max_num_seqs: Optional[int] = Field(default=None, ge=1)
     max_num_batched_tokens: Optional[int] = Field(default=None, ge=1)
     swap_space: int = Field(default=4, ge=0, le=64)
-    block_size: Optional[int] = Field(default=None, ge=1, le=128)
+    block_size: Optional[int] = Field(default=None, ge=1, le=512)
     enable_prefix_caching: Optional[bool] = None
     disable_log_stats: bool = False
     load_format: str = "auto"

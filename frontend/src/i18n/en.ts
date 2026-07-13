@@ -248,6 +248,26 @@ const en = {
   'logs.noLogs': 'No logs yet. Start a vLLM server to see output.',
   'logs.noFilterMatch': 'No logs match the current filter.',
   'logs.scrollToBottom': 'Scroll to bottom',
+
+  // Usage Stats
+  'usage.title': 'Usage Stats',
+  'usage.subtitle': 'Token usage and request statistics',
+  'usage.loading': 'Loading...',
+  'usage.today': 'Today',
+  'usage.resetToday': 'Reset Today',
+  'usage.resetConfirm': 'Reset today’s stats?',
+  'usage.noData': 'No usage data yet',
+  'usage.ip': 'IP',
+  'usage.ipDetail': 'IP Detail',
+  'usage.inputTokens': 'Input Tokens',
+  'usage.outputTokens': 'Output Tokens',
+  'usage.total': 'Total',
+  'usage.totalTokens': 'Total Tokens',
+  'usage.requests': 'Requests',
+  'usage.models': 'Models',
+  'usage.allModels': 'All Models',
+  'usage.trend': 'Trend',
+  'usage.noTrend': 'No trend data',
 } as const
 
 export default en

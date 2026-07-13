@@ -16,6 +16,11 @@ import psutil
 from metrics_scraper import MetricsScrapState, scrape_full_metrics
 
 
+# Path where the model is expected to live inside the vLLM docker container.
+# Mirrors the value hard-coded in the frontend docker command preview.
+DOCKER_MODEL_PATH = "/model"
+
+
 class ProcessState(str, Enum):
     IDLE = "idle"
     STARTING = "starting"
@@ -96,19 +101,24 @@ class VLLMConfig:
             for m in self.docker_volume_mounts:
                 mode = m.get("mode", "ro")
                 cmd += ["-v", f"{m['host_path']}:{m['container_path']}:{mode}"]
+        # Auto-mount the host model directory into the container at the
+        # in-container model path so `--model /model` resolves. Only do this
+        # for local model paths that aren't already mounted to that path.
+        if self.model and os.path.isdir(self.model):
+            host_model = os.path.abspath(self.model)
+            model_already_mounted = any(
+                m.get("container_path") == DOCKER_MODEL_PATH
+                for m in (self.docker_volume_mounts or [])
+            )
+            if not model_already_mounted:
+                cmd += ["-v", f"{host_model}:{DOCKER_MODEL_PATH}"]
         if self.env_vars:
             for k, v in self.env_vars.items():
                 cmd += ["-e", f"{k}={v}"]
         cmd.append(self.docker_image)
-        # Append vllm serve command inside container
-        serve_cmd = self.to_serve_cmd(python_path)
-        cmd += serve_cmd
-        return cmd
-
-    def to_serve_cmd(self, python_path: str = "python") -> list[str]:
-        """Return vllm serve arguments (used inside docker container)."""
-        vllm_bin = str(Path(python_path).parent / "vllm")
-        cmd = [vllm_bin, "serve", self.model]
+        # The image's entrypoint already runs `vllm serve`; we only need to
+        # supply the in-container model path and the remaining vLLM flags.
+        cmd += ["--model", DOCKER_MODEL_PATH]
         cmd += self._build_flag_args()
         return cmd
 

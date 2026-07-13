@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import * as React from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import InstanceCard from '../components/InstanceCard'
@@ -6,7 +6,7 @@ import ConfigForm from '../components/ConfigForm'
 import { useI18n } from '../i18n'
 import { API_BASE } from '../api/config'
 import type { UseWebSocketReturn, InstanceStatus } from '../api/websocket'
-import type { Capabilities, DockerStatus } from '../api/types'
+import type { Capabilities } from '../api/types'
 
 interface Toast {
   type: 'success' | 'error'
@@ -20,52 +20,45 @@ interface InstancesProps {
 export default function Instances({ ws }: InstancesProps) {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const [showNewModal, setShowNewModal] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [duplicateConfig, setDuplicateConfig] = useState<Record<string, any> | null>(null)
-  const [showCleanModal, setShowCleanModal] = useState(false)
-  const [cleaning, setCleaning] = useState(false)
-  const [cleanResult, setCleanResult] = useState<{
+  const [showNewModal, setShowNewModal] = React.useState(false)
+  const [creating, setCreating] = React.useState(false)
+  const [duplicateConfig, setDuplicateConfig] = React.useState<Record<string, any> | null>(null)
+  const [showCleanModal, setShowCleanModal] = React.useState(false)
+  const [cleaning, setCleaning] = React.useState(false)
+  const [cleanResult, setCleanResult] = React.useState<{
     found: number
     killed: number
     orphans: Array<{ pid: number; port: number | null; model: string }>
   } | null>(null)
-  const [toast, setToast] = useState<Toast | null>(null)
-  const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
+  const [toast, setToast] = React.useState<Toast | null>(null)
+  const [capabilities, setCapabilities] = React.useState<Capabilities | null>(null)
 
   // Fetch capabilities early when landing on the page
-  useEffect(() => {
+  React.useEffect(() => {
     if (capabilities) return
     fetch(`${API_BASE}/api/capabilities`)
       .then((r) => r.json())
       .then((data) => { if (data) setCapabilities(data) })
       .catch(() => {})
-    fetch(`${API_BASE}/api/docker/status`)
-      .then((r) => r.json())
-      .then((data) => { if (data) setDockerStatus(data) })
-      .catch(() => setDockerStatus({available: false, containers: []}))
   }, [capabilities])
 
-  // Docker status state
-  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null)
-
-  const showToast = useCallback((type: Toast['type'], message: string) => {
+  const showToast = React.useCallback((type: Toast['type'], message: string) => {
     setToast({ type, message })
   }, [])
 
-  const hideToast = useCallback(() => {
+  const hideToast = React.useCallback(() => {
     setToast(null)
   }, [])
 
   // Auto-hide toast after 5 seconds
-  useEffect(() => {
+  React.useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => hideToast(), 5000)
       return () => clearTimeout(timer)
     }
   }, [toast, hideToast])
 
-  const handleCreate = useCallback(async (config: Record<string, any>) => {
+  const handleCreate = React.useCallback(async (config: Record<string, any>) => {
     setCreating(true)
     try {
       await ws.createInstance(config)
@@ -78,12 +71,12 @@ export default function Instances({ ws }: InstancesProps) {
     }
   }, [ws.createInstance, t, showToast])
 
-  const handleDuplicate = useCallback((instance: InstanceStatus) => {
+  const handleDuplicate = React.useCallback((instance: InstanceStatus) => {
     setDuplicateConfig(instance.config || {})
     setShowNewModal(true)
   }, [])
 
-  const handleStop = useCallback(async (id: string) => {
+  const handleStop = React.useCallback(async (id: string) => {
     try {
       await ws.stopInstance(id)
     } catch (err) {
@@ -91,7 +84,7 @@ export default function Instances({ ws }: InstancesProps) {
     }
   }, [ws.stopInstance, t, showToast])
 
-  const handleStart = useCallback(async (id: string) => {
+  const handleStart = React.useCallback(async (id: string) => {
     try {
       await ws.startInstance(id)
     } catch (err) {
@@ -99,7 +92,7 @@ export default function Instances({ ws }: InstancesProps) {
     }
   }, [ws.startInstance, t, showToast])
 
-  const handleDelete = useCallback(async (id: string) => {
+  const handleDelete = React.useCallback(async (id: string) => {
     try {
       await ws.deleteInstance(id)
     } catch (err) {
@@ -107,12 +100,12 @@ export default function Instances({ ws }: InstancesProps) {
     }
   }, [ws.deleteInstance, t, showToast])
 
-  const handleViewLogs = useCallback((id: string) => {
+  const handleViewLogs = React.useCallback((id: string) => {
     ws.selectInstance(id)
     navigate('/logs')
   }, [ws.selectInstance, navigate])
 
-  const handleScanPorts = useCallback(async () => {
+  const handleScanPorts = React.useCallback(async () => {
     setCleaning(true)
     setCleanResult(null)
     setShowCleanModal(true)

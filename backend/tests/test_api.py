@@ -89,7 +89,7 @@ async def test_models_scan_nonexistent(client):
 @pytest.mark.asyncio
 async def test_create_instance_mocked(client):
     with patch("instance_manager.InstanceManager.start", new_callable=AsyncMock, return_value=True):
-        resp = await client.post("/api/instances", json={"model": "test-model"})
+        resp = await client.post("/api/instances", json={"model": "test-model", "port": 8004})
     assert resp.status_code == 200
     data = resp.json()
     assert "instance_id" in data
@@ -100,7 +100,7 @@ async def test_create_instance_mocked(client):
 async def test_list_instances_after_create(client):
     # First create an instance with mocked start
     with patch("instance_manager.InstanceManager.start", new_callable=AsyncMock, return_value=True):
-        create_resp = await client.post("/api/instances", json={"model": "test-model"})
+        create_resp = await client.post("/api/instances", json={"model": "test-model", "port": 8003})
     assert create_resp.status_code == 200
 
     # Now list instances — should have at least 1
@@ -125,6 +125,7 @@ async def test_create_instance_docker(client):
     with patch("instance_manager.InstanceManager.start", new_callable=AsyncMock, return_value=True):
         payload = {
             "model": "test-model",
+            "port": 8001,
             "launch_mode": "docker",
             "docker_image": "vllm-moet-sm120:v024",
             "docker_gpus": '"device=0"',
@@ -140,7 +141,7 @@ async def test_create_instance_docker(client):
 async def test_delete_docker_instance(client):
     """Verify deleting a docker-mode instance works."""
     with patch("instance_manager.InstanceManager.start", new_callable=AsyncMock, return_value=True):
-        payload = {"model": "test", "port": 8001, "launch_mode": "docker", "docker_image": "img"}
+        payload = {"model": "test", "port": 8002, "launch_mode": "docker", "docker_image": "img"}
         resp = await client.post("/api/instances", json=payload)
     assert resp.status_code == 200
     instance_id = resp.json()["instance_id"]
