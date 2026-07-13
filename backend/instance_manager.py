@@ -5,6 +5,7 @@ import os
 import signal
 import atexit
 import uuid
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -14,6 +15,9 @@ from typing import Optional
 import psutil
 
 from metrics_scraper import MetricsScrapState, scrape_full_metrics
+
+
+logger = logging.getLogger(__name__)
 
 
 # Path where the model is expected to live inside the vLLM docker container.
@@ -70,9 +74,9 @@ class VLLMConfig:
     docker_ipc: str = "host"
     docker_volume_mounts: list[dict[str, str]] = field(default_factory=list)
 
-    def to_command(self, python_path: str = "python") -> list[str]:
+    def to_command(self, python_path: str = "python", container_name: Optional[str] = None) -> list[str]:
         if self.launch_mode == "docker":
-            return self._to_docker_command(python_path)
+            return self._to_docker_command(python_path, container_name)
 
         vllm_bin = str(Path(python_path).parent / "vllm")
         cmd = [
@@ -86,9 +90,11 @@ class VLLMConfig:
 
     # --- Docker mode helpers ---
 
-    def _to_docker_command(self, python_path: str = "python") -> list[str]:
+    def _to_docker_command(self, python_path: str = "python", container_name: Optional[str] = None) -> list[str]:
         """Build a docker run command for the vLLM instance."""
         cmd = ["docker", "run", "--rm"]
+        if container_name:
+            cmd += ["--name", container_name]
         if self.docker_gpus:
             cmd += ["--gpus", self.docker_gpus]
         if self.docker_network:
@@ -498,7 +504,7 @@ class InstanceManager:
         instance.start_time = datetime.now()
         instance.last_error = None
 
-        cmd = instance.config.to_command(self._python_path)
+        cmd = instance.config.to_command(self._python_path, container_name=instance_id)
 
         if instance.config.launch_mode == "docker":
             return await self._start_docker(instance_id, instance, cmd)
@@ -735,6 +741,16 @@ class InstanceManager:
 
     async def _start_docker(self, instance_id: str, instance: Instance, cmd: list[str]) -> bool:
         """Start a vLLM instance inside a Docker container."""
+        # Remove any stale container left from a previous run with the same name.
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "rm", "-f", instance_id,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+        except (FileNotFoundError, OSError):
+            pass
         try:
             instance._process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -769,12 +785,27 @@ class InstanceManager:
             instance._read_output_task = None
             instance._monitor_task = None
         try:
-            if instance._process:
-                await asyncio.create_subprocess_exec("docker", "stop", instance_id)
-            elif instance.pid:
-                os.kill(instance.pid, signal.SIGTERM)
-        except:
-            pass
+            # The container is named after the launcher instance id, so this
+            # actually stops the running container (releasing its GPU memory).
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "stop", instance_id,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                # Fall back to a forced removal if stop reported an error
+                # (e.g. already removed or name not found).
+                rm = await asyncio.create_subprocess_exec(
+                    "docker", "rm", "-f", instance_id,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await rm.wait()
+        except FileNotFoundError:
+            logger.warning("docker not found; cannot stop container %s", instance_id)
+        except Exception as e:
+            logger.warning("Failed to stop docker container %s: %s", instance_id, e)
         instance.state = ProcessState.STOPPED
         instance.pid = None
         instance._process = None
