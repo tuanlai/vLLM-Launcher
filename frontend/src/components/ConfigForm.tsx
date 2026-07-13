@@ -151,12 +151,13 @@ function buildCommand(config: ConfigState): string {
       }
       cmd += ' -v ' + hostPack + ':/serve/packs'
     }
-    cmd += ' ' + config.docker_image
     // Auto-mount the host model directory into the container at /model so
-    // `--model /model` resolves (matches the backend command builder).
+    // `--model /model` resolves. Must come BEFORE the image, or docker treats
+    // it as an arg to the container command and `vllm serve` rejects it.
     if (config.model && config.model.startsWith('/')) {
       cmd += ' -v ' + config.model + ':/model'
     }
+    cmd += ' ' + config.docker_image
     cmd += ' --model /model'
     if (config.served_model_name) cmd += ' --served-model-name ' + config.served_model_name
     if (config.port !== DEFAULTS.port) cmd += ' --port ' + String(config.port)
