@@ -16,6 +16,7 @@ from .gpu import create_gpu_router
 from .files import create_files_router
 from .ws import create_ws_router
 from .docker import create_docker_router
+from .usage import create_usage_router
 
 
 def register_routes(
@@ -25,6 +26,7 @@ def register_routes(
     vram_checker: VRAMChecker,
     config_store: ConfigStore,
     ws_manager: WebSocketManager,
+    tracker: TokenTracker | None = None,
 ) -> None:
     """Register all API routers on the FastAPI app."""
     app.include_router(create_instances_router(manager, ws_manager))
@@ -35,6 +37,8 @@ def register_routes(
     app.include_router(create_files_router())
     app.include_router(create_ws_router(manager, ws_manager))
     app.include_router(create_docker_router())
+    if tracker:
+        app.include_router(create_usage_router(tracker))
 
     @app.get("/api/health")
     async def health():

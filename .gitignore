@@ -45,3 +45,4 @@ frontend/dist/
 
 # Config (user-specific)
 ~/.config/vllm-launcher/
+*.db

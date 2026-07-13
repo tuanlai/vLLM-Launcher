@@ -53,6 +53,7 @@ def create_instances_router(manager: InstanceManager, ws_manager: WebSocketManag
             docker_network=req.docker_network,
             docker_ipc=req.docker_ipc,
             docker_volume_mounts=req.docker_volume_mounts,
+            docker_pack_dir=req.docker_pack_dir,
         )
 
         instance_id = manager.create(config)

@@ -7,6 +7,7 @@ import Instances from './pages/Instances'
 import Logs from './pages/Logs'
 import Playground from './pages/Playground'
 import Settings from './pages/Settings'
+import UsageStats from './pages/UsageStats'
 import { useWebSocket } from './api/websocket'
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
               <Route path="/instances" element={<ErrorBoundary><Instances ws={ws} /></ErrorBoundary>} />
               <Route path="/logs" element={<ErrorBoundary><Logs ws={ws} /></ErrorBoundary>} />
               <Route path="/playground" element={<ErrorBoundary><Playground ws={ws} /></ErrorBoundary>} />
+              <Route path="/usage" element={<ErrorBoundary><UsageStats /></ErrorBoundary>} />
               <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
             </Routes>
         </AnimatePresence>

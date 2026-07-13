@@ -2,6 +2,7 @@ import asyncio
 import shlex
 import time
 import os
+import re
 import signal
 import atexit
 import uuid
@@ -23,6 +24,57 @@ logger = logging.getLogger(__name__)
 # Path where the model is expected to live inside the vLLM docker container.
 # Mirrors the value hard-coded in the frontend docker command preview.
 DOCKER_MODEL_PATH = "/model"
+# In-container path where the vLLM-Moet W2 quantization pack is stored. The
+# pack must live on a real bind-mounted host fs (not the container overlayfs),
+# otherwise it is lost when the container is removed with `--rm`.
+DOCKER_PACK_PATH = "/serve/packs"
+
+
+def docker_pack_fingerprint(
+    model: str,
+    tensor_parallel_size: int,
+    quantization: "str | None",
+    load_format: str,
+    env_vars: "dict[str, str] | None",
+) -> str:
+    """Stable, filesystem-safe tag for a vLLM-Moet quantization pack.
+
+    The pack content depends on the checkpoint (model), the tensor-parallel
+    degree (per-rank packing), and the W2 knobs that change *what* gets
+    persisted: the cubin build dir, whether the FP4 delta tier is enabled,
+    the delta split geometry and delta policy. Changing any of these
+    invalidates the pack, so the tag captures them to keep different configs
+    in isolated subdirs instead of ping-ponging a shared pack into corruption.
+    """
+    env = env_vars or {}
+
+    def truthy(v: object) -> bool:
+        return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+    def san(s: str) -> str:
+        return re.sub(r"[^A-Za-z0-9._-]", "_", str(s)) or "x"
+
+    model_tag = san(os.path.basename(model or "model"))[:32]
+    cubit = san(env.get("VLLM_MOE_W2_CUBIT_DIR", "") or "def")
+    dsplit = "1" if truthy(env.get("VLLM_MOE_W2_DELTA_SPLIT")) else "0"
+    dpol = san(env.get("VLLM_MOE_W2_DELTA_POLICY", "") or "need")
+    delta_gb = str(env.get("VLLM_MOE_W2_DELTA_GB", "0")).strip()
+    delta_on = truthy(env.get("VLLM_MOE_W2_DELTA")) and delta_gb not in (
+        "0",
+        "",
+        "none",
+    )
+    parts = [
+        f"m{model_tag}",
+        f"tp{tensor_parallel_size}",
+        f"q{san(quantization or 'def')}",
+        f"lf{san(load_format or 'def')}",
+        f"cb{cubit}",
+        f"ds{dsplit}",
+        f"dp{dpol}",
+        f"dl{1 if delta_on else 0}",
+    ]
+    return "_".join(parts)
 
 
 class ProcessState(str, Enum):
@@ -73,6 +125,9 @@ class VLLMConfig:
     docker_network: str = "host"
     docker_ipc: str = "host"
     docker_volume_mounts: list[dict[str, str]] = field(default_factory=list)
+    # Host directory under which the config-fingerprinted W2 pack subdir is
+    # created. If empty, no pack mount is added (pack won't persist).
+    docker_pack_dir: str = ""
 
     def to_command(self, python_path: str = "python", container_name: Optional[str] = None) -> list[str]:
         if self.launch_mode == "docker":
@@ -121,6 +176,21 @@ class VLLMConfig:
         if self.env_vars:
             for k, v in self.env_vars.items():
                 cmd += ["-e", f"{k}={v}"]
+        # Persist the vLLM-Moet W2 quantization pack on a real host fs in a
+        # subdir keyed by the config fingerprint, so re-quantization is skipped
+        # after the first boot for that exact config.
+        if self.docker_pack_dir:
+            fp = docker_pack_fingerprint(
+                self.model,
+                self.tensor_parallel_size,
+                self.quantization,
+                self.load_format,
+                self.env_vars,
+            )
+            host_pack = os.path.join(os.path.abspath(self.docker_pack_dir), fp)
+            cmd += ["-v", f"{host_pack}:{DOCKER_PACK_PATH}"]
+            if not (self.env_vars and "VLLM_MOE_W2_STORE_DIR" in self.env_vars):
+                cmd += ["-e", f"VLLM_MOE_W2_STORE_DIR={DOCKER_PACK_PATH}"]
         cmd.append(self.docker_image)
         # The image's entrypoint already runs `vllm serve`; we only need to
         # supply the in-container model path and the remaining vLLM flags.

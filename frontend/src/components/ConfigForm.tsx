@@ -51,6 +51,7 @@ interface ConfigState {
   docker_network: string
   docker_ipc: string
   docker_volume_mounts: Array<{host_path: string; container_path: string; mode: string}>
+  docker_pack_dir: string
 }
 
 const DEFAULTS: ConfigState = {
@@ -89,6 +90,34 @@ const DEFAULTS: ConfigState = {
   docker_network: 'host',
   docker_ipc: 'host',
   docker_volume_mounts: [],
+  docker_pack_dir: '',
+}
+
+function dockerPackFingerprint(config: ConfigState): string {
+  const env = Object.fromEntries(
+    (config.env_vars || [])
+      .filter((e) => e.valid && e.key.trim())
+      .map((e) => [e.key.trim(), e.value.trim()]),
+  )
+  const truthy = (v?: string) =>
+    !!v && ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase())
+  const san = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_') || 'x'
+  const modelTag = san(config.model ? config.model.split('/').pop() || 'model' : 'model').slice(0, 32)
+  const cubit = san(env['VLLM_MOE_W2_CUBIT_DIR'] || 'def')
+  const dsplit = truthy(env['VLLM_MOE_W2_DELTA_SPLIT']) ? '1' : '0'
+  const dpol = san(env['VLLM_MOE_W2_DELTA_POLICY'] || 'need')
+  const deltaGb = (env['VLLM_MOE_W2_DELTA_GB'] || '0').trim()
+  const deltaOn = truthy(env['VLLM_MOE_W2_DELTA']) && !['0', '', 'none'].includes(deltaGb)
+  return [
+    `m${modelTag}`,
+    `tp${config.tensor_parallel_size}`,
+    `q${san(config.quantization || 'def')}`,
+    `lf${san(config.load_format || 'def')}`,
+    `cb${cubit}`,
+    `ds${dsplit}`,
+    `dp${dpol}`,
+    `dl${deltaOn ? 1 : 0}`,
+  ].join('_')
 }
 
 function buildCommand(config: ConfigState): string {
@@ -109,6 +138,17 @@ function buildCommand(config: ConfigState): string {
           cmd += ' -e ' + env.key.trim() + '=' + env.value.trim()
         }
       }
+    }
+    // Persist the vLLM-Moet W2 quantization pack on a real host fs in a
+    // subdir keyed by the config fingerprint so re-quantization is skipped
+    // after the first boot for that exact config.
+    if (config.docker_pack_dir) {
+      const fp = dockerPackFingerprint(config)
+      const hostPack = (config.docker_pack_dir.replace(/\/+$/, '') + '/' + fp).replace(/\/+/g, '/')
+      if (!config.env_vars?.some((e) => e.valid && e.key.trim() === 'VLLM_MOE_W2_STORE_DIR')) {
+        cmd += ' -e VLLM_MOE_W2_STORE_DIR=/serve/packs'
+      }
+      cmd += ' -v ' + hostPack + ':/serve/packs'
     }
     cmd += ' ' + config.docker_image
     // Auto-mount the host model directory into the container at /model so
@@ -336,6 +376,7 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
       docker_network: initialConfig.docker_network ?? DEFAULTS.docker_network,
       docker_ipc: initialConfig.docker_ipc ?? DEFAULTS.docker_ipc,
       docker_volume_mounts: initialConfig.docker_volume_mounts ?? DEFAULTS.docker_volume_mounts,
+      docker_pack_dir: initialConfig.docker_pack_dir ?? DEFAULTS.docker_pack_dir,
     }
   }
 
@@ -410,6 +451,7 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
       docker_network: config.docker_network,
       docker_ipc: config.docker_ipc,
       docker_volume_mounts: config.docker_volume_mounts,
+      docker_pack_dir: config.docker_pack_dir,
     }
     onSubmit(submitConfig)
   }
@@ -541,18 +583,32 @@ export default function ConfigForm({ onSubmit, disabled, initialConfig, capabili
                   <option value="none">none</option>
                 </select>
               </div>
-              <div className="form-group">
-                <label className="input-label">IPC 模式</label>
-                <select
-                  className="input"
-                  value={config.docker_ipc}
-                  onChange={(e) => update('docker_ipc', e.target.value)}
-                >
-                  <option value="host">host</option>
-                  <option value="none">none</option>
-                </select>
-              </div>
-            </div>
+                  <div className="form-group">
+                    <label className="input-label">IPC 模式</label>
+                    <select
+                      className="input"
+                      value={config.docker_ipc}
+                      onChange={(e) => update('docker_ipc', e.target.value)}
+                    >
+                      <option value="host">host</option>
+                      <option value="none">none</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="input-label">量化包持久化目录</label>
+                    <input
+                      className="input"
+                      value={config.docker_pack_dir}
+                      placeholder="/data/vllm-packs"
+                      onChange={(e) => update('docker_pack_dir', e.target.value)}
+                    />
+                    <small className="hint-text">
+                      留空则不持久化（每次启动重新量化）。填写后会在该目录下按配置指纹（模型/TP/W2 开关）创建独立子目录作为 VLLM_MOE_W2_STORE_DIR，重启复用不再重算。
+                    </small>
+                  </div>
+                </div>
           </>
         )}
       </div>

@@ -44,6 +44,7 @@ class CreateInstanceRequest(BaseModel):
     docker_network: str = "host"
     docker_ipc: str = "host"
     docker_volume_mounts: list[dict[str, str]] = Field(default_factory=list)
+    docker_pack_dir: str = ""
 
     @field_validator('extra_args')
     @classmethod

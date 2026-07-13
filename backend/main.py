@@ -19,6 +19,7 @@ from model_scanner import ModelScanner
 from vram_checker import VRAMChecker
 from config_store import ConfigStore
 from websocket_manager import WebSocketManager
+from token_tracker import TokenTracker
 from routes import register_routes
 
 setup_logging()
@@ -31,6 +32,7 @@ model_scanner = ModelScanner()
 vram_checker = VRAMChecker()
 config_store = ConfigStore()
 ws_manager = WebSocketManager()
+tracker = TokenTracker()
 
 
 @asynccontextmanager
@@ -98,7 +100,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-register_routes(app, manager, model_scanner, vram_checker, config_store, ws_manager)
+register_routes(app, manager, model_scanner, vram_checker, config_store, ws_manager, tracker)
 
 
 # --- Serve frontend static files ---
